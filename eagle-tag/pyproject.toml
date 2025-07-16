@@ -21,12 +21,20 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "scida",
+  "pint",
+  "numpy",
+  "h5py",
+]
 
 [project.urls]
-Documentation = "https://github.com/unknown/eagle-tag#readme"
-Issues = "https://github.com/unknown/eagle-tag/issues"
-Source = "https://github.com/unknown/eagle-tag"
+Documentation = "https://github.com/QuasarX1/eagle-tag#readme"
+Issues = "https://github.com/QuasarX1/eagle-tag/issues"
+Source = "https://github.com/QuasarX1/eagle-tag"
+
+[project.scripts]
+eagle-tag = "eagle_tag._scripts._run:main"
 
 [tool.hatch.version]
 path = "src/eagle_tag/__about__.py"
