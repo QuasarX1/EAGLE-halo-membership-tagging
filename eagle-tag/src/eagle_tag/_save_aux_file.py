@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import errno
 import os
 
 import h5py as h5
@@ -42,7 +43,7 @@ def make_aux_file(
     filepath = make_aux_file_path(directory, number, redshift_tag, is_snipshot)
 
     if os.path.exists(filepath) and not allow_overwrite:
-        raise FileExistsError(f"Auxiliary file {filepath} already exists. Use allow_overwrite to overwrite.")
+        raise FileExistsError(errno.EEXIST, f"Auxiliary file {filepath} already exists. Use allow_overwrite to overwrite.", filepath)
 
     # Create the file and set attributes
     with h5.File(filepath, "w") as file:
@@ -116,4 +117,4 @@ def save_chunk(
     data
 ) -> None:
     with h5.File(filepath, "a") as file:
-        file[f"PartType{particle_type}/{field}"][offset:offset + length] = data[:]
+        file[f"{particle_type}/{field}"][offset:offset + length] = data[:]
