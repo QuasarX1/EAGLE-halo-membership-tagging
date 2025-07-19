@@ -33,9 +33,11 @@ def make_aux_file(
     directory: str,
     number: str,
     redshift_tag: str,
-    number_of_gas_particles: int,
-    number_of_star_particles: int,
     metadata: Metadata,
+    number_of_gas_particles: int|None = None,
+    number_of_dark_matter_particles: int|None = None,
+    number_of_star_particles: int|None = None,
+    number_of_black_hole_particles: int|None = None,
     allow_overwrite: bool = False,
     is_snipshot: bool = False
 ) -> str:
@@ -48,13 +50,8 @@ def make_aux_file(
     # Create the file and set attributes
     with h5.File(filepath, "w") as file:
 
-        # Create the nesessary groups
-        consts = file.create_group("Constants")
-        header = file.create_group("Header")
-        gas = file.create_group("PartType0")
-        stars = file.create_group("PartType4")
-
         # Set constants
+        consts = file.create_group("Constants")
         consts.attrs["BOLTZMANN"]    = np.float64(metadata.constant_boltzmann)
         consts.attrs["GAMMA"]        = np.float64(metadata.constant_gamma)
         consts.attrs["PROTONMASS"]   = np.float64(metadata.constant_protonmass)
@@ -62,6 +59,7 @@ def make_aux_file(
         consts.attrs["SOLAR_MASS"]   = np.float64(metadata.constant_solar_mass)
 
         # Set header attributes
+        header = file.create_group("Header")
         header.attrs["ExpansionFactor"]     = np.float64(metadata.header_expansion_factor)
         header.attrs["HubbleParam"]         = np.float64(metadata.header_hubble_param)
         header.attrs["MassTable"]           = np.array(metadata.header_mass_table, dtype = np.float64)
@@ -72,39 +70,91 @@ def make_aux_file(
 
         # Create gas datasets and assign attributes
 
-        gas_group_number     = gas.create_dataset("GroupNumber",    shape = (number_of_gas_particles,), dtype = np.int32)
-        gas_particle_ids     = gas.create_dataset("ParticleIDs",    shape = (number_of_gas_particles,), dtype = np.int64)
-        gas_sub_group_number = gas.create_dataset("SubGroupNumber", shape = (number_of_gas_particles,), dtype = np.int32)
+        if number_of_gas_particles is not None:
 
-        gas_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
-        gas_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        gas_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+            gas = file.create_group("PartType0")
 
-        gas_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
-        gas_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        gas_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+            gas_group_number     = gas.create_dataset("GroupNumber",    shape = (number_of_gas_particles,), dtype = np.int32)
+            gas_particle_ids     = gas.create_dataset("ParticleIDs",    shape = (number_of_gas_particles,), dtype = np.int64)
+            gas_sub_group_number = gas.create_dataset("SubGroupNumber", shape = (number_of_gas_particles,), dtype = np.int32)
 
-        gas_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
-        gas_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        gas_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+            gas_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            gas_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            gas_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            gas_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
+            gas_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            gas_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            gas_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            gas_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            gas_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+        # Create dark_matter datasets and assign attributes
+
+        if number_of_dark_matter_particles is not None:
+
+            dark_matter = file.create_group("PartType1")
+
+            dark_matter_group_number     = dark_matter.create_dataset("GroupNumber",    shape = (number_of_dark_matter_particles,), dtype = np.int32)
+            dark_matter_particle_ids     = dark_matter.create_dataset("ParticleIDs",    shape = (number_of_dark_matter_particles,), dtype = np.int64)
+            dark_matter_sub_group_number = dark_matter.create_dataset("SubGroupNumber", shape = (number_of_dark_matter_particles,), dtype = np.int32)
+
+            dark_matter_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            dark_matter_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            dark_matter_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            dark_matter_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
+            dark_matter_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            dark_matter_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            dark_matter_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            dark_matter_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            dark_matter_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
 
         # Create star datasets and assign attributes
 
-        stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32)
-        stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64)
-        stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32)
+        if number_of_star_particles is not None:
 
-        stars_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
-        stars_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        stars_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+            stars = file.create_group("PartType4")
 
-        stars_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
-        stars_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        stars_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+            stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32)
+            stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64)
+            stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32)
 
-        stars_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
-        stars_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
-        stars_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+            stars_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            stars_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            stars_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            stars_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
+            stars_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            stars_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            stars_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            stars_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            stars_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+        # Create black_hole datasets and assign attributes
+
+        if number_of_black_hole_particles is not None:
+
+            black_holes = file.create_group("PartType5")
+
+            black_hole_group_number     = black_holes.create_dataset("GroupNumber",    shape = (number_of_black_hole_particles,), dtype = np.int32)
+            black_hole_particle_ids     = black_holes.create_dataset("ParticleIDs",    shape = (number_of_black_hole_particles,), dtype = np.int64)
+            black_hole_sub_group_number = black_holes.create_dataset("SubGroupNumber", shape = (number_of_black_hole_particles,), dtype = np.int32)
+
+            black_hole_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            black_hole_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            black_hole_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            black_hole_particle_ids.attrs["CGSConversionFactor"] = np.float64(1.0)
+            black_hole_particle_ids.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            black_hole_particle_ids.attrs["h-scale-exponent"]    = np.float64(0.0)
+
+            black_hole_sub_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
+            black_hole_sub_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
+            black_hole_sub_group_number.attrs["h-scale-exponent"]    = np.float64(0.0)
 
     return filepath
 
