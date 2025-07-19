@@ -214,11 +214,12 @@ information for FOF groups and SUBFIND haloes.
         catalogue_subhalo_ids   = catalogue_membership.data[particle_type]["SubGroupNumber"]
         print(f"    Number of {particle_type_name} particles in FOF groups: {catalogue_membership.data[particle_type].fieldlength}", flush = True)
 
-        #-------------------------|
-        # Get the membership data |
-        #-------------------------|
+        #------------------------------------------|
+        # Calculate how to sort the membership IDs |
+        #------------------------------------------|
         print("    Computing argsort.", flush = True)
 
+        # This makes searching the data easier
         sorted_indexes__catalogue_particle_ids = dask_array.from_array(np.argsort(catalogue_particle_ids), chunks = catalogue_particle_ids.chunks)
 
         #------------------------------|
