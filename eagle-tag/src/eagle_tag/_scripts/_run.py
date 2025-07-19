@@ -48,9 +48,9 @@ information for FOF groups and SUBFIND haloes.
     parser.add_argument("--overwrite",          action  = "store_true",    help = "Overwrite existing output files.")
     parser.add_argument("--update",             action  = "store_true",    help = "Allow the use of an existing output file.")
     parser.add_argument("--gas",                action  = "store_true",    help = "Include gas particles.")
-    parser.add_argument("--dark_matter",        action  = "store_true",    help = "Include dark matter particles.")
+    parser.add_argument("--darkmatter",        action  = "store_true",    help = "Include dark matter particles.")
     parser.add_argument("--stars",              action  = "store_true",    help = "Include star particles.")
-    parser.add_argument("--black_holes",        action  = "store_true",    help = "Include black hole particles.")
+    parser.add_argument("--blackholes",        action  = "store_true",    help = "Include black hole particles.")
     parser.add_argument("--verbose",            action  = "store_true",    help = "Display extra information.")
 
     # This will exit the program if -h or --help are specified
@@ -62,7 +62,7 @@ information for FOF groups and SUBFIND haloes.
     # Check for a valid set of options |
     #----------------------------------|
 
-    if not (args.gas or args.dark_matter or args.stars or args.black_holes):
+    if not (args.gas or args.darkmatter or args.stars or args.blackholes):
         raise ValueError("At least one of --gas, --dark_matter, --stars or --black_holes must be specified.")
     
     if args.update and args.overwrite:
@@ -141,14 +141,16 @@ information for FOF groups and SUBFIND haloes.
     output_filepath: str
     try:
         output_filepath = make_aux_file(
-            directory                = args.output_directory,
-            number                   = args.snapshot_number,
-            redshift_tag             = args.snapshot_tag,
-            number_of_gas_particles  = n_total_gas,
-            number_of_star_particles = n_total_stars,
-            metadata                 = metadata,
-            allow_overwrite          = args.overwrite,
-            is_snipshot              = args.snipshot
+            directory                       = args.output_directory,
+            number                          = args.snapshot_number,
+            redshift_tag                    = args.snapshot_tag,
+            metadata                        = metadata,
+            number_of_gas_particles         = n_total_gas   if args.gas         else None,
+            number_of_dark_matter_particles = n_total_dm    if args.darkmatter else None,
+            number_of_star_particles        = n_total_stars if args.stars       else None,
+            number_of_black_hole_particles  = n_total_bh    if args.blackholes else None,
+            allow_overwrite                 = args.overwrite,
+            is_snipshot                     = args.snipshot
         )
     except FileExistsError as e:
         if args.update:
@@ -163,14 +165,20 @@ information for FOF groups and SUBFIND haloes.
     #--------------------------|
 
     for particle_type, particle_type_name in zip(["PartType0", "PartType1", "PartType4", "PartType5"], ["gas", "dark_matter", "star", "black_hole"]):
+
+        #-----------------------------------|
+        # Skip particle types not requested |
+        #-----------------------------------|
+
         if particle_type == "PartType0" and not args.gas:
             continue
-        if particle_type == "PartType1" and not args.dark_matter:
+        if particle_type == "PartType1" and not args.darkmatter:
             continue
         if particle_type == "PartType4" and not args.stars:
             continue
-        if particle_type == "PartType5" and not args.black_holes:
+        if particle_type == "PartType5" and not args.blackholes:
             continue
+
         print(f"Tagging {particle_type_name} particles:", flush = True)
 
         #--------------------------------------------|
@@ -199,7 +207,7 @@ information for FOF groups and SUBFIND haloes.
         #-------------------------|
         # Get the membership data |
         #-------------------------|
-        print("Getting membership data.", flush = True)
+        print("    Getting membership data.", flush = True)
 
         catalogue_particle_ids  = catalogue_membership.data[particle_type]["ParticleIDs"]
         catalogue_group_numbers = catalogue_membership.data[particle_type]["GroupNumber"]
@@ -321,7 +329,7 @@ information for FOF groups and SUBFIND haloes.
 
         delayed_calls = [process_chunk(chunk_index) for chunk_index in range(n_chunks)]
         compute(*delayed_calls)
-        print(f"{particle_type_name.title()} particles done.", flush = True)
+        print(f"    {particle_type_name.title()} particles done.", flush = True)
 
     print("DONE", flush = True)
     return
