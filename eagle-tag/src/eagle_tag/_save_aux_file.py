@@ -64,9 +64,9 @@ def make_aux_file(
         header.attrs["HubbleParam"]         = np.float64(metadata.header_hubble_param)
         header.attrs["MassTable"]           = np.array(metadata.header_mass_table, dtype = np.float64)
         header.attrs["NumFilesPerSnapshot"] = np.int32(metadata.header_num_files_per_snapshot)
-        header.attrs["NumPart_Sub"]         = np.array(metadata.header_num_part_sub, dtype = np.int32)
-        header.attrs["NumPart_ThisFile"]    = np.array(metadata.header_num_part_this_file, dtype = np.int32)
-        header.attrs["NumPart_Total"]       = np.array(metadata.header_num_part_total, dtype = np.int32)
+        header.attrs["NumPart_Sub"]         = np.array(metadata.header_num_part_sub, dtype = np.int64)
+        header.attrs["NumPart_ThisFile"]    = np.array(metadata.header_num_part_this_file, dtype = np.int64)
+        header.attrs["NumPart_Total"]       = np.array(metadata.header_num_part_total, dtype = np.int64)
 
         # Create gas datasets and assign attributes
 
