@@ -25,9 +25,9 @@ class Metadata(object):
         self.header_hubble_param:           np.float64                                   = np.float64(1.0)
         self.header_mass_table:             np.ndarray[tuple[int], np.dtype[np.float64]] = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype = np.float64)
         self.header_num_files_per_snapshot: np.int32                                     = np.int32(1)
-        self.header_num_part_sub:           np.ndarray[tuple[int], np.dtype[np.int32]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int32)
-        self.header_num_part_this_file:     np.ndarray[tuple[int], np.dtype[np.int32]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int32)
-        self.header_num_part_total:         np.ndarray[tuple[int], np.dtype[np.int32]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int32)
+        self.header_num_part_sub:           np.ndarray[tuple[int], np.dtype[np.int64]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int64)
+        self.header_num_part_this_file:     np.ndarray[tuple[int], np.dtype[np.int64]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int64)
+        self.header_num_part_total:         np.ndarray[tuple[int], np.dtype[np.int64]]   = np.array([0, 0, 0, 0, 0, 0], dtype = np.int64)
 
 def make_aux_file(
     directory: str,
