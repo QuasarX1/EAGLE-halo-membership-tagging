@@ -2,13 +2,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from scida import load
-from scida.interface import Dataset
+import os
 
-def load_catalogue_membership(catalogue_directory: str, number: str, redshift_tag: str):
-    snap_object = load(catalogue_directory, fileprefix = f"eagle_subfind_snip_particles_{number}_{redshift_tag}", units = False)
-    if "PartType0" not in snap_object.data.keys():
-        raise ValueError("Snapshot does not contain PartType0 (gas) data.")
-    if "PartType4" not in snap_object.data.keys():
-        raise ValueError("Snapshot does not contain PartType4 (star) data.")
-    return snap_object
+import xarray as xr
+
+from ._load_data_with_xarray import load_hdf5_pattern_with_xarray
+
+def load_catalogue_membership(catalogue_directory: str, number: str, redshift_tag: str, is_snipshot: bool) -> dict[str, xr.Dataset]:
+    snapshot_prefix = "snip_" if is_snipshot else ""
+    filepath_template = os.path.join(catalogue_directory, f"eagle_subfind_{snapshot_prefix}particles_{number}_{redshift_tag}.*.hdf5")
+    return {
+        "PartType0" : load_hdf5_pattern_with_xarray(filepath_template, "PartType0", ["ParticleIDs", "GroupNumber", "SubGroupNumber"]),
+        "PartType1" : load_hdf5_pattern_with_xarray(filepath_template, "PartType1", ["ParticleIDs", "GroupNumber", "SubGroupNumber"]),
+        "PartType4" : load_hdf5_pattern_with_xarray(filepath_template, "PartType4", ["ParticleIDs", "GroupNumber", "SubGroupNumber"]),
+        "PartType5" : load_hdf5_pattern_with_xarray(filepath_template, "PartType5", ["ParticleIDs", "GroupNumber", "SubGroupNumber"]),
+    }

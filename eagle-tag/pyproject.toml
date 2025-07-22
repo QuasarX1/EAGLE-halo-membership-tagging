@@ -22,8 +22,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "scida",
-  "pint",
+  "xarray",
   "numpy",
   "h5py",
 ]
