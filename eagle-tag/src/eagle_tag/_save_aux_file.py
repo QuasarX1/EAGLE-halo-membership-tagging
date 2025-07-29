@@ -8,8 +8,10 @@ import os
 import h5py as h5
 import numpy as np
 
-def make_aux_file_path(directory: str, number: str, redshift_tag: str, is_snipshot: bool = False) -> str:
-    return os.path.join(directory, f"sn{'i' if is_snipshot else 'a'}pshot_grp_info_{number}_{redshift_tag}.hdf5")
+from ._snapshot_tag import SnapshotTag
+
+def make_aux_file_path(directory: str, tag: SnapshotTag, is_snipshot: bool = False) -> str:
+    return os.path.join(directory, f"sn{'i' if is_snipshot else 'a'}pshot_grp_info_{tag.tag}.hdf5")
 
 class Metadata(object):
 
@@ -31,8 +33,7 @@ class Metadata(object):
 
 def make_aux_file(
     directory: str,
-    number: str,
-    redshift_tag: str,
+    tag: SnapshotTag,
     metadata: Metadata,
     number_of_gas_particles: int|None = None,
     number_of_dark_matter_particles: int|None = None,
@@ -42,7 +43,7 @@ def make_aux_file(
     is_snipshot: bool = False
 ) -> str:
 
-    filepath = make_aux_file_path(directory, number, redshift_tag, is_snipshot)
+    filepath = make_aux_file_path(directory, tag, is_snipshot)
 
     if os.path.exists(filepath) and not allow_overwrite:
         raise FileExistsError(errno.EEXIST, f"Auxiliary file {filepath} already exists. Use allow_overwrite to overwrite.", filepath)
