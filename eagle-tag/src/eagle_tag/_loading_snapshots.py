@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-
 import h5py as h5
 import xarray as xr
 import numpy as np

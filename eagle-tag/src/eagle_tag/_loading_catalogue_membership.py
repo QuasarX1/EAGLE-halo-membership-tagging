@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-
 import h5py as h5
 import xarray as xr
 import numpy as np
@@ -14,7 +12,7 @@ from ._eagle_filepaths import EAGLE_Snapshot
 def load_catalogue_membership(snapshot: EAGLE_Snapshot) -> dict[str, xr.Dataset|None]:
 
     if not snapshot.has_catalogue_membership:
-        raise FileNotFoundError(f"Unable to locate snapshot files for {snapshot}.")
+        raise FileNotFoundError(f"Unable to locate catalogue membership files for {snapshot}.")
 
     filepath_template = snapshot.catalogue_membership_file_template
     filepath_pattern = filepath_template.format("*")
