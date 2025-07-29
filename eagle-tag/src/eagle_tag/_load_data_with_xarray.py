@@ -66,8 +66,12 @@ def load_hdf5_pattern_with_xarray(
     filepath_template: str,
     hdf5_group_path: str|None = None,
     datasets: list[str]|None = None,
-    coordinate_dataset: str|None = None
+    coordinate_dataset: str|None = None,
+    skip_values: list[str]|None = None
 ) -> xr.Dataset:
+    
+    if skip_values is not None and len(skip_values) == 0:
+        skip_values = None
 
     if "{" in filepath_template or "*" in filepath_template:
 
@@ -83,6 +87,9 @@ def load_hdf5_pattern_with_xarray(
             length_after_wildcard = len(filepath_template.split("*")[1])
             chunks = glob.glob(filepath_template)
             chunks.sort(key = lambda x: int(x[wildcard_position : -length_after_wildcard] if length_after_wildcard != 0 else x[wildcard_position:]))
+
+        if skip_values is not None:
+            chunks = [value for value in chunks if value[wildcard_position : -length_after_wildcard] not in skip_values]
 
         
         return load_hdf5_files_with_xarray(chunks, hdf5_group_path, datasets, coordinate_dataset)

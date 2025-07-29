@@ -92,17 +92,17 @@ information for FOF groups and SUBFIND haloes.
     snapshot_first_file_path = os.path.join(snapshot_directory, f"sn{'i' if args.snipshot else 'a'}p_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
     catalogue_membership_first_file_path = os.path.join(catalogue_membership_directory, f"eagle_subfind_{'snip_' if args.snipshot else ''}particles_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
 
-    #--------------------|
-    # Start dask cluster |
-    #--------------------|
-    Console.print_info("Creating directory paths.", flush = True)
-
-    cluster = LocalCluster(
-        n_workers = DASK_WORKERS,
-        memory_limit = DASK_MEMORY_LIMIT_PER_WORKER,
-        dashboard_address = f":{DASK_PORT}"
-    )
-    client = cluster.get_client()
+#    #--------------------|
+#    # Start dask cluster |
+#    #--------------------|
+#    Console.print_info("Creating directory paths.", flush = True)
+#
+#    cluster = LocalCluster(
+#        n_workers = DASK_WORKERS,
+#        memory_limit = DASK_MEMORY_LIMIT_PER_WORKER,
+#        dashboard_address = f":{DASK_PORT}"
+#    )
+#    client = cluster.get_client()
 
     #----------------------------------------|
     # Load snapshot and catalogue membership |
@@ -119,10 +119,10 @@ information for FOF groups and SUBFIND haloes.
     catalogue_membership = load_catalogue_membership(catalogue_membership_directory, number = args.snapshot_number, redshift_tag = args.snapshot_tag, is_snipshot = args.snipshot)
     Console.print_info(catalogue_membership, flush = True)
 
-    n_total_gas   = int(snapshot["PartType0"]["ParticleIDs"].shape[0])
-    n_total_dm    = int(snapshot["PartType1"]["ParticleIDs"].shape[0])
-    n_total_stars = int(snapshot["PartType4"]["ParticleIDs"].shape[0])
-    n_total_bh    = int(snapshot["PartType5"]["ParticleIDs"].shape[0])
+    n_total_gas   = int(snapshot["PartType0"]["ParticleIDs"].shape[0]) if snapshot["PartType0"] is not None else 0
+    n_total_dm    = int(snapshot["PartType1"]["ParticleIDs"].shape[0]) if snapshot["PartType1"] is not None else 0
+    n_total_stars = int(snapshot["PartType4"]["ParticleIDs"].shape[0]) if snapshot["PartType4"] is not None else 0
+    n_total_bh    = int(snapshot["PartType5"]["ParticleIDs"].shape[0]) if snapshot["PartType5"] is not None else 0
     snapshot_particle_numbers = { "PartType0" : n_total_gas, "PartType1" : n_total_dm, "PartType4" : n_total_stars, "PartType5" : n_total_bh }
     Console.print_info(f"Number of gas particles:         {n_total_gas}",   flush = True)
     Console.print_info(f"Number of dark matter particles: {n_total_dm}",    flush = True)
@@ -149,8 +149,8 @@ information for FOF groups and SUBFIND haloes.
         metadata.header_hubble_param           = np.float64(file["Header"].attrs["HubbleParam"])
         metadata.header_mass_table             = np.array(file["Header"].attrs["MassTable"], dtype = np.float64)
         metadata.header_num_files_per_snapshot = np.int32(1) # Only one aux file
-        metadata.header_num_part_this_file     = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int32) # Only one aux file so all the particles are here
-        metadata.header_num_part_total         = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int32)
+        metadata.header_num_part_this_file     = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int64) # Only one aux file so all the particles are here
+        metadata.header_num_part_total         = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int64)
 
     Console.print_info("    Catalogue.", flush = True)
     with h5.File(catalogue_membership_first_file_path, "r") as file:
@@ -190,6 +190,14 @@ information for FOF groups and SUBFIND haloes.
 
     for particle_type, particle_type_name in zip(["PartType0", "PartType1", "PartType4", "PartType5"], ["gas", "dark_matter", "star", "black_hole"]):
 
+        #---------------------------------|
+        # Skip particle types not present |
+        #---------------------------------|
+
+        if snapshot[particle_type] is None:
+            Console.print_info(f"No {particle_type_name} particles to tag.", flush = True)
+            continue
+
         #-----------------------------------|
         # Skip particle types not requested |
         #-----------------------------------|
@@ -228,56 +236,68 @@ information for FOF groups and SUBFIND haloes.
         # Compute the offsets for each chunk (1 more element than the number of chunks)
         chunk_offsets = np.array([0, *chunk_lengths.cumsum()], dtype = np.int64)
 
-        #-------------------------|
-        # Get the membership data |
-        #-------------------------|
-        Console.print_info("    Getting membership data.", flush = True)
+        #---------------------------------------|
+        # Check that there is actually any data |
+        #---------------------------------------|
 
-        catalogue_particle_ids  = catalogue_membership[particle_type]["ParticleIDs"]
-        catalogue_group_numbers = catalogue_membership[particle_type]["GroupNumber"]
-        catalogue_subhalo_ids   = catalogue_membership[particle_type]["SubGroupNumber"]
-        Console.print_info(f"    Number of {particle_type_name} particles in FOF groups: {catalogue_membership[particle_type]["ParticleIDs"].shape[0]}", flush = True)
+        catalogue_exists = catalogue_membership[particle_type] is not None
 
-        #----------------------------------|
-        # Handle chunking of the catalogue |
-        #----------------------------------|
+        # If no data exists, skip all the pre-manipulation and jump straight to the processing
+        if catalogue_exists:
 
-        # This can be a simple chunking as it is only to reduce the memory load
+            #-------------------------|
+            # Get the membership data |
+            #-------------------------|
+            Console.print_info("    Getting membership data.", flush = True)
 
-        n_cat_chunks = args.catalogue_chunks
-        catalogue_chunk_size = catalogue_membership[particle_type]["ParticleIDs"].shape[0] // n_cat_chunks
-        catalogue_chunk_sizes = np.full(shape = (n_cat_chunks,), fill_value = catalogue_chunk_size, dtype = np.int64)
-        catalogue_chunk_sizes[-1] += catalogue_membership[particle_type]["ParticleIDs"].shape[0] % n_cat_chunks
-        catalogue_chunk_offsets = np.array([0, *catalogue_chunk_sizes.cumsum()], dtype = np.int64)
+            catalogue_particle_ids  = catalogue_membership[particle_type]["ParticleIDs"]
+            catalogue_group_numbers = catalogue_membership[particle_type]["GroupNumber"]
+            catalogue_subhalo_ids   = catalogue_membership[particle_type]["SubGroupNumber"]
+            Console.print_info(f"    Number of {particle_type_name} particles in FOF groups: {catalogue_membership[particle_type]["ParticleIDs"].shape[0]}", flush = True)
 
-        #------------------------------------------|
-        # Calculate how to sort the membership IDs |
-        #------------------------------------------|
-        Console.print_info("    Computing argsort of catalogue membership particle IDs.", flush = True)
+            #----------------------------------|
+            # Handle chunking of the catalogue |
+            #----------------------------------|
 
-        # This makes searching the data easier
+            # This can be a simple chunking as it is only to reduce the memory load
 
-        if n_cat_chunks == 1:
-            # Simple version to do the argsort in one go
+            n_cat_chunks = args.catalogue_chunks
+            catalogue_chunk_size = catalogue_membership[particle_type]["ParticleIDs"].shape[0] // n_cat_chunks
+            catalogue_chunk_sizes = np.full(shape = (n_cat_chunks,), fill_value = catalogue_chunk_size, dtype = np.int64)
+            catalogue_chunk_sizes[-1] += catalogue_membership[particle_type]["ParticleIDs"].shape[0] % n_cat_chunks
+            catalogue_chunk_offsets = np.array([0, *catalogue_chunk_sizes.cumsum()], dtype = np.int64)
 
-            Console.print_info("    Loading particle id data.", flush = True)
-            t = catalogue_particle_ids.values
-            Console.print_info("    Computing argsort of catalogue membership particle IDs.", flush = True)
-            sorted_indexes__catalogue_particle_ids = dask_array.from_array(np.argsort(t), chunks = catalogue_particle_ids.chunks)
+            #------------------------------------------|
+            # Calculate how to sort the membership IDs |
+            #------------------------------------------|
+            Console.print_info("    Computing argsort of catalogue membership particle IDs:", flush = True)
 
-        else:
-            # Compute the argsort in chunks
-            # This assumes argsort has a time complexity of O(n log n)
-            # making the chunked time complexity O( O(n) [ 1 - ( log x / log n ) ] )
-            # making the new runtime 1 - ( log x / log n ) times faster
+            # This makes searching the data easier
 
-            sorted_indexes__catalogue_particle_ids = np.empty(shape = (catalogue_membership[particle_type]["ParticleIDs"].shape[0],), dtype = np.int64)
-            for catalogue_chunk_index in range(n_cat_chunks):
-                Console.print_info(f"        Doing chunk {catalogue_chunk_index + 1} / {n_cat_chunks}.", flush = True)
-                chunk_region = slice(catalogue_chunk_offsets[catalogue_chunk_index], catalogue_chunk_offsets[catalogue_chunk_index + 1])
-                # Add the offset of this chunk to the resulting argsort to allow direct indexing of the original data
-                sorted_indexes__catalogue_particle_ids[chunk_region] = np.argsort(catalogue_particle_ids[chunk_region].values) + catalogue_chunk_offsets[catalogue_chunk_index]
-            sorted_indexes__catalogue_particle_ids = dask_array.from_array(sorted_indexes__catalogue_particle_ids, chunks = catalogue_particle_ids.chunks)
+            if n_cat_chunks == 1:
+                # Simple version to do the argsort in one go
+
+                Console.print_info("        Loading particle id data.", flush = True)
+                catalogue_particle_ids__in_memory = catalogue_particle_ids.values
+                Console.print_info("        Argsort.", flush = True)
+                sorted_indexes__catalogue_particle_ids = dask_array.from_array(np.argsort(catalogue_particle_ids__in_memory), chunks = catalogue_particle_ids.chunks)
+
+            else:
+                # Compute the argsort in chunks
+                # This assumes argsort has a time complexity of O(n log n)
+                # making the chunked time complexity O( O(n) [ 1 - ( log x / log n ) ] )
+                # making the new runtime 1 - ( log x / log n ) times faster
+
+                sorted_indexes__catalogue_particle_ids = np.empty(shape = (catalogue_membership[particle_type]["ParticleIDs"].shape[0],), dtype = np.int64)
+                for catalogue_chunk_index in range(n_cat_chunks):
+                    Console.print_info(f"            Doing chunk {catalogue_chunk_index + 1} / {n_cat_chunks}:", flush = True)
+                    chunk_region = slice(catalogue_chunk_offsets[catalogue_chunk_index], catalogue_chunk_offsets[catalogue_chunk_index + 1])
+                    # Add the offset of this chunk to the resulting argsort to allow direct indexing of the original data
+                    Console.print_info("                Loading particle id data.", flush = True)
+                    catalogue_particle_ids__in_memory = catalogue_particle_ids[chunk_region].values
+                    Console.print_info("                Argsort.", flush = True)
+                    sorted_indexes__catalogue_particle_ids[chunk_region] = np.argsort(catalogue_particle_ids__in_memory) + catalogue_chunk_offsets[catalogue_chunk_index]
+                sorted_indexes__catalogue_particle_ids = dask_array.from_array(sorted_indexes__catalogue_particle_ids, chunks = catalogue_particle_ids.chunks)
 
         #------------------------------|
         # Define how to update a chunk |
@@ -296,73 +316,109 @@ information for FOF groups and SUBFIND haloes.
             snapshot_ids = snapshot[particle_type]["ParticleIDs"][snapshot_slice]
 
             snapshot_membership_mask = np.full(shape = (chunk_lengths[chunk_index],), fill_value = False,      dtype = np.bool_)
-            snapshot_group_numbers   = np.full(shape = (chunk_lengths[chunk_index],), fill_value = NULL_INDEX, dtype = catalogue_group_numbers.dtype)
-            snapshot_subhalo_ids     = np.full(shape = (chunk_lengths[chunk_index],), fill_value = NULL_INDEX, dtype = catalogue_subhalo_ids.dtype)
+            snapshot_group_numbers   = np.full(shape = (chunk_lengths[chunk_index],), fill_value = NULL_INDEX, dtype = catalogue_group_numbers.dtype if catalogue_exists else np.int32) # Use default values when unable to get data type automatically
+            snapshot_subhalo_ids     = np.full(shape = (chunk_lengths[chunk_index],), fill_value = NULL_INDEX, dtype = catalogue_subhalo_ids.dtype   if catalogue_exists else np.int32) # Use default values when unable to get data type automatically
 
-            #--------------------------------|
-            # Loop over each catalogue chunk |
-            #--------------------------------|
+            # Only attempt if there is actually catalogue data.
+            # Otherwise just skip to writing the null data.
+            if catalogue_exists:
 
-            for catalogue_chunk_index in range(n_cat_chunks):
-                if True:#chunk_index == 0:
-                    Console.print_info(f"        Doing chunk {catalogue_chunk_index + 1} / {n_cat_chunks}:", flush = True)
+                #--------------------------------|
+                # Loop over each catalogue chunk |
+                #--------------------------------|
 
-                if catalogue_chunk_index > 0:
-                    # No need to do this for the first chunk
-                    snapshot_membership_mask[:] = False # Reset the mask for each chunk
+                for catalogue_chunk_index in range(n_cat_chunks):
+                    if True:#chunk_index == 0:
+                        Console.print_info(f"        Doing chunk {catalogue_chunk_index + 1} / {n_cat_chunks}:", flush = True)
 
-                catalogue_chunk_region = slice(catalogue_chunk_offsets[catalogue_chunk_index], catalogue_chunk_offsets[catalogue_chunk_index + 1])
+                    if catalogue_chunk_index > 0:
+                        # No need to do this for the first chunk
+                        snapshot_membership_mask[:] = False # Reset the mask for each chunk
 
-                if True:#chunk_index == 0:
-                    if n_cat_chunks > 1:
-                        Console.print_info("            Determining locations.", flush = True)
-                    else:
-                        Console.print_info("        Determining locations.", flush = True)
-                # Figure out where the data needs to be drawn from.
-                # WARNING: this uses searchsorted, which means any valid ID will have a return value - even if it doesn't appear in the list!
-                snap_target_indexes = dask_array.take(
-                    sorted_indexes__catalogue_particle_ids,
-                    dask_array.searchsorted( # This must ONLY be performed on each chunk!
-                        dask_array.take(
-                            catalogue_particle_ids,
-                            sorted_indexes__catalogue_particle_ids[catalogue_chunk_region]
-                        ),
-                        snapshot_ids
-                    ) + catalogue_chunk_offsets[catalogue_chunk_index] # Add the snapshot chunk offset to allow direct access to the original data
-                )
-                # The only trustworthy indexes are where the IDs actually match!
-                if True:#chunk_index == 0:
-                    if n_cat_chunks > 1:
-                        Console.print_info("            Finding matches.", flush = True)
-                    else:
-                        Console.print_info("        Finding matches.", flush = True)
-                snapshot_membership_mask[(snapshot_ids == dask_array.take(catalogue_particle_ids, snap_target_indexes)).compute()] = True
+                    catalogue_chunk_region = slice(catalogue_chunk_offsets[catalogue_chunk_index], catalogue_chunk_offsets[catalogue_chunk_index + 1])
 
-                # Update the data arrays where a match is found
-                if True:#chunk_index == 0:
-                    if n_cat_chunks > 1:
-                        Console.print_info("    Updating group numbers.", flush = True)
-                    else:
-                        Console.print_info("        Updating group numbers.", flush = True)
-                snapshot_group_numbers[snapshot_membership_mask] = dask_array.take(catalogue_group_numbers, snap_target_indexes[snapshot_membership_mask])
-                if True:#chunk_index == 0:
-                    if n_cat_chunks > 1:
-                        Console.print_info("    Updating subhalo IDs.", flush = True)
-                    else:
-                        Console.print_info("        Updating subhalo IDs.", flush = True)
-                snapshot_subhalo_ids[snapshot_membership_mask] = dask_array.take(catalogue_subhalo_ids, snap_target_indexes[snapshot_membership_mask])
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("            Determining locations.", flush = True)
+                        else:
+                            Console.print_info("        Determining locations.", flush = True)
+                    # Figure out where the data needs to be drawn from.
 
-                if True:#chunk_index == 0:
-                    if n_cat_chunks > 1:
-                        Console.print_info("            Ensuring all values are computed.", flush = True)
-                    else:
-                        Console.print_info("        Ensuring all values are computed.", flush = True)
+    #                # WARNING: this uses searchsorted, which means any valid ID will have a return value - even if it doesn't appear in the list!
+    #                snap_target_indexes = dask_array.take(
+    #                    sorted_indexes__catalogue_particle_ids,
+    #                    dask_array.searchsorted( # This must ONLY be performed on each chunk!
+    #                        dask_array.take(
+    #                            catalogue_particle_ids.data,
+    #                            sorted_indexes__catalogue_particle_ids[catalogue_chunk_region]
+    #                        ),
+    #                        snapshot_ids.data
+    #                    ) + catalogue_chunk_offsets[catalogue_chunk_index] # Add the snapshot chunk offset to allow direct access to the original data
+    #                )
+
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("                Sorting catalogue ID data.", flush = True)
+                        else:
+                            Console.print_info("            Sorting catalogue ID data.", flush = True)
+                    sorted_cat_ids = dask_array.take(
+                        catalogue_particle_ids.data,
+                        sorted_indexes__catalogue_particle_ids[catalogue_chunk_region]
+                    )
+
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("                Searching sorted data.", flush = True)
+                        else:
+                            Console.print_info("            Searching sorted data.", flush = True)
+                    draw_from_locations = dask_array.searchsorted( # This must ONLY be performed on each chunk!
+                        sorted_cat_ids,
+                        snapshot_ids.data
+                    ) + catalogue_chunk_offsets[catalogue_chunk_index]
+
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("                Mapping to unsorted order.", flush = True)
+                        else:
+                            Console.print_info("            Mapping to unsorted order.", flush = True)
+                    snap_target_indexes = dask_array.take(
+                        sorted_indexes__catalogue_particle_ids,
+                        draw_from_locations
+                    )
+
+                    # The only trustworthy indexes are where the IDs actually match!
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("            Finding matches.", flush = True)
+                        else:
+                            Console.print_info("        Finding matches.", flush = True)
+                    snapshot_membership_mask[(snapshot_ids == dask_array.take(catalogue_particle_ids, snap_target_indexes)).compute()] = True
+
+                    # Update the data arrays where a match is found
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("    Updating group numbers.", flush = True)
+                        else:
+                            Console.print_info("        Updating group numbers.", flush = True)
+                    snapshot_group_numbers[snapshot_membership_mask] = dask_array.take(catalogue_group_numbers, snap_target_indexes[snapshot_membership_mask])
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("    Updating subhalo IDs.", flush = True)
+                        else:
+                            Console.print_info("        Updating subhalo IDs.", flush = True)
+                    snapshot_subhalo_ids[snapshot_membership_mask] = dask_array.take(catalogue_subhalo_ids, snap_target_indexes[snapshot_membership_mask])
+
+                    if True:#chunk_index == 0:
+                        if n_cat_chunks > 1:
+                            Console.print_info("            Ensuring all values are computed.", flush = True)
+                        else:
+                            Console.print_info("        Ensuring all values are computed.", flush = True)
 
             #-----------------------------|
             # Write the chunk to the disk |
             #-----------------------------|
 
-            snapshot_ids = compute(snapshot_ids) # Make sure the IDs are available in memory
+            snapshot_ids = snapshot_ids.values # Make sure the IDs are available in memory
 
             with file_lock:
                 if args.verbose or chunk_index == 0:
