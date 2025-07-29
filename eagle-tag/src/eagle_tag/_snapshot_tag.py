@@ -22,13 +22,16 @@ class SnapshotTag:
     number: str = "028"
     redshift_tag: str = "z000p000"
 
+    def __repr__(self) -> str:
+        return f"{self.number} (z = {self.redshift_tag})"
+
     def __str__(self) -> str:
         return f"{self.number}_{self.redshift}"
 
     @property
     def tag(self) -> str:
         return str(self)
-    
+
     @property
     def redshift(self) -> float:
         return float(self.redshift_tag[1:].replace("p", "."))
