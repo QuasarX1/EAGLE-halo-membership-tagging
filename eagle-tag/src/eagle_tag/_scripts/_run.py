@@ -11,6 +11,7 @@ from dask import delayed, compute
 from dask.distributed import LocalCluster
 import xarray as xr
 import dask.array as dask_array
+from dask.distributed import LocalCluster
 from dask.utils import SerializableLock
 import numpy as np
 import h5py as h5
@@ -109,7 +110,7 @@ information for FOF groups and SUBFIND haloes.
     #----------------------------------------|
     Console.print_info("Loading snapshot and catalogue membership.", flush = True)
 
-    # scida is used to load EAGLE data in a delayed fashion using dask.
+    # xarray is used to load EAGLE data in a delayed fashion using dask.
     # This will not actually 'load' the data - just the structure and some metadata.
     # Data will be loaded from disk only when it is actually needed.
 
