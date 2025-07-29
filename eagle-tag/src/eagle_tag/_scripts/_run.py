@@ -17,7 +17,7 @@ import numpy as np
 import h5py as h5
 from QuasarCode import Console
 
-from eagle_tag import Metadata, load_snapshot, load_catalogue_membership, make_aux_file, save_chunk
+from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, Metadata, load_snapshot, load_catalogue_membership, make_aux_file, save_chunk
 
 
 
@@ -85,13 +85,17 @@ information for FOF groups and SUBFIND haloes.
     #---------------------------------|
     Console.print_info("Creating directory paths.", flush = True)
 
-    snapshot_directory = os.path.join(args.simulation_directory, f"sn{'i' if args.snipshot else 'a'}pshot_{args.snapshot_number}_{args.snapshot_tag}")
+    files = EAGLE_Files(directory = args.simulation_directory)
+    target_tag = SnapshotTag(number = args.snapshot_number, redshift_tag = args.snapshot_tag)
+    snapshot_files = files.snapshot(tag = target_tag, snipshot = args.snipshot)
+
+    snapshot_directory = snapshot_files.snapshot_directory#os.path.join(args.simulation_directory, f"sn{'i' if args.snipshot else 'a'}pshot_{args.snapshot_number}_{args.snapshot_tag}")
     #catalogue_data_directory = os.path.join(args.simulation_directory, f"groups_{'snip_' if args.snipshot else ''}{args.snapshot_number}_{args.snapshot_tag}")
-    catalogue_membership_directory = os.path.join(args.simulation_directory, f"particledata_{'snip_' if args.snipshot else ''}{args.snapshot_number}_{args.snapshot_tag}")
+    catalogue_membership_directory = snapshot_files.catalogue_membership_directory#os.path.join(args.simulation_directory, f"particledata_{'snip_' if args.snipshot else ''}{args.snapshot_number}_{args.snapshot_tag}")
 
     # We need to get these manually so that we can load metadata with h5py
-    snapshot_first_file_path = os.path.join(snapshot_directory, f"sn{'i' if args.snipshot else 'a'}p_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
-    catalogue_membership_first_file_path = os.path.join(catalogue_membership_directory, f"eagle_subfind_{'snip_' if args.snipshot else ''}particles_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
+    snapshot_first_file_path = snapshot_files.snapshot_file_template.format(0)#os.path.join(snapshot_directory, f"sn{'i' if args.snipshot else 'a'}p_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
+    catalogue_membership_first_file_path = snapshot_files.catalogue_membership_file_template.format(0)#os.path.join(catalogue_membership_directory, f"eagle_subfind_{'snip_' if args.snipshot else ''}particles_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
 
 #    #--------------------|
 #    # Start dask cluster |
@@ -114,10 +118,10 @@ information for FOF groups and SUBFIND haloes.
     # This will not actually 'load' the data - just the structure and some metadata.
     # Data will be loaded from disk only when it is actually needed.
 
-    snapshot = load_snapshot(snapshot_directory, number = args.snapshot_number, redshift_tag = args.snapshot_tag, is_snipshot = args.snipshot)
+    snapshot = load_snapshot(snapshot_files)
     Console.print_info(snapshot, flush = True)
 #    catalogue_data = load_catalogue_data(catalogue_data_directory, number = args.snapshot_number, redshift_tag = args.snapshot_tag)
-    catalogue_membership = load_catalogue_membership(catalogue_membership_directory, number = args.snapshot_number, redshift_tag = args.snapshot_tag, is_snipshot = args.snipshot)
+    catalogue_membership = load_catalogue_membership(snapshot_files)
     Console.print_info(catalogue_membership, flush = True)
 
     n_total_gas   = int(snapshot["PartType0"]["ParticleIDs"].shape[0]) if snapshot["PartType0"] is not None else 0
@@ -167,8 +171,7 @@ information for FOF groups and SUBFIND haloes.
     try:
         output_filepath = make_aux_file(
             directory                       = args.output_directory,
-            number                          = args.snapshot_number,
-            redshift_tag                    = args.snapshot_tag,
+            tag                             = snapshot_files.tag,
             metadata                        = metadata,
             number_of_gas_particles         = n_total_gas   if args.gas         else None,
             number_of_dark_matter_particles = n_total_dm    if args.darkmatter else None,
