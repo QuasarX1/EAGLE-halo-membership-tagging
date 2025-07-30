@@ -34,6 +34,7 @@ Source = "https://github.com/QuasarX1/eagle-tag"
 
 [project.scripts]
 eagle-tag = "eagle_tag._scripts._run:main"
+eagle-tag-reorder = "eagle_tag._scripts._calculate_reorder:main"
 
 [tool.hatch.version]
 path = "src/eagle_tag/__about__.py"
