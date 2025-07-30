@@ -26,7 +26,7 @@ class SnapshotTag:
         return f"{self.number} (z = {self.redshift_tag})"
 
     def __str__(self) -> str:
-        return f"{self.number}_{self.redshift}"
+        return f"{self.number}_{self.redshift_tag}"
 
     @property
     def tag(self) -> str:
