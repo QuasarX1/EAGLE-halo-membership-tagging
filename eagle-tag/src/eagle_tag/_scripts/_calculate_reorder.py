@@ -258,9 +258,10 @@ Calculates the indexing order to move from one set of particle IDs to another.
     #---------------------------------|
     # Get snapshot chunk file lengths |
     #---------------------------------|
-    Console.print_info("Getting snapshot partitioning chunk sizes.", flush = True)
+    Console.print_info("Getting snapshot partitioning chunk sizes:", flush = True)
 
     # Source
+    Console.print_info("    Source.", flush = True)
 
     number_of_files__source: int
     with h5.File(snapshot_files__source.snapshot_file_template.format(0), "r") as file:
@@ -273,6 +274,7 @@ Calculates the indexing order to move from one set of particle IDs to another.
             data_in_files__source[i][:] = file["Header"].attrs["NumPart_ThisFile"]
 
     # Target
+    Console.print_info("    Target.", flush = True)
 
     number_of_files__target: int
     with h5.File(snapshot_files__target.snapshot_file_template.format(0), "r") as file:
@@ -284,10 +286,14 @@ Calculates the indexing order to move from one set of particle IDs to another.
         with h5.File(snapshot_files__target.snapshot_file_template.format(i), "r") as file:
             data_in_files__target[i][:] = file["Header"].attrs["NumPart_ThisFile"]
 
-
-
+    #------------------------|
+    # Create the output file |
+    #------------------------|
+    Console.print_info("Preparing output file.", flush = True)
 
     output_filepath: str = make_file_path(args.output_directory, tag__source, tag__target)
+
+    Console.print_info(f"Output file: {output_filepath}", flush = True)
 
     make_reorder_file(
         filepath = output_filepath,
@@ -301,11 +307,39 @@ Calculates the indexing order to move from one set of particle IDs to another.
         update = args.update
     )
 
+    #--------------------------|
+    # Loop over particle types |
+    #--------------------------|
+
     for particle_type in ["PartType0", "PartType1", "PartType4", "PartType5"]:
 
-        forwards_indexes, backwards_indexes = calculate_reorder(snapshot__source[particle_type]["ParticleIDs"], snapshot__target[particle_type]["ParticleIDs"])#TODO: create this function
+        Console.print_info(f"Doing {particle_type}:", flush = True)
 
+        #-----------|
+        # Load data |
+        #-----------|
+
+        Console.print_info(f"    Loading source IDs.", flush = True)
+        particle_ids__source = snapshot__source[particle_type]["ParticleIDs"].values
+
+        Console.print_info(f"    Loading target IDs.", flush = True)
+        particle_ids__target = snapshot__target[particle_type]["ParticleIDs"].values
+
+        #-------------------|
+        # Calculate reorder |
+        #-------------------|
+        Console.print_info(f"    Calculating reorder.", flush = True)
+    
+        forwards_indexes, backwards_indexes = calculate_reorder(particle_ids__source, particle_ids__target)
+
+        #-----------|
+        # Save data |
+        #-----------|
+        Console.print_info(f"    Saving data.", flush = True)
+    
         save_data(output_filepath, particle_type, forwards_indexes, backwards_indexes)
+
+        Console.print_info(f"    Done.", flush = True)
 
     Console.print_info("DONE", flush = True)
     return
