@@ -18,12 +18,12 @@ def load_catalogue_membership(snapshot: EAGLE_Snapshot) -> dict[str, xr.Dataset|
     filepath_pattern = filepath_template.format("*")
 
     number_of_files: int
-    with h5.File(filepath_template.replace("*", "0"), "r") as file:
+    with h5.File(filepath_template.format(0), "r") as file:
         number_of_files = int(file["Header"].attrs["NumFilesPerSnapshot"])
 
     data_in_files = np.full(shape = (number_of_files, 6), fill_value = False, dtype = np.bool_)
     for i in range(number_of_files):
-        with h5.File(filepath_template.replace("*", str(i)), "r") as file:
+        with h5.File(filepath_template.format(i), "r") as file:
             data_in_files[i][:] = file["Header"].attrs["NumPart_ThisFile"] > 0
     any_data_present = np.any(data_in_files, axis = 0)
 
