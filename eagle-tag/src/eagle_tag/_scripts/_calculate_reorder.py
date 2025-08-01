@@ -18,7 +18,7 @@ import numpy as np
 import h5py as h5
 from QuasarCode import Console
 
-from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, load_snapshot
+from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, load_snapshot, calculate_reorder
 
 
 
@@ -82,8 +82,8 @@ def make_reorder_file(
 
             gas = file.create_group("PartType0")
 
-            gas_forwards  = gas.create_dataset("ForwardsIndexes",  shape = (number_of_particles_per_file__target[0],), dtype = np.int64)
-            gas_backwards = gas.create_dataset("BackwardsIndexes", shape = (number_of_particles_per_file__source[0],), dtype = np.int64)
+            gas_forwards  = gas.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[0],), dtype = np.int64)
+            gas_backwards = gas.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[0],), dtype = np.int64)
 
             gas_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             gas_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -97,8 +97,8 @@ def make_reorder_file(
 
             dark_matter = file.create_group("PartType1")
 
-            dark_matter_forwards  = dark_matter.create_dataset("ForwardsIndexes",  shape = (number_of_particles_per_file__target[1],), dtype = np.int64)
-            dark_matter_backwards = dark_matter.create_dataset("BackwardsIndexes", shape = (number_of_particles_per_file__source[1],), dtype = np.int64)
+            dark_matter_forwards  = dark_matter.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[1],), dtype = np.int64)
+            dark_matter_backwards = dark_matter.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[1],), dtype = np.int64)
 
             dark_matter_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             dark_matter_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -112,8 +112,8 @@ def make_reorder_file(
 
             stars = file.create_group("PartType4")
 
-            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles_per_file__target[4],), dtype = np.int64)
-            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles_per_file__source[4],), dtype = np.int64)
+            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64)
+            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64)
 
             stars_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -127,8 +127,8 @@ def make_reorder_file(
 
             black_holes = file.create_group("PartType5")
 
-            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles_per_file__target[5],), dtype = np.int64)
-            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles_per_file__source[5],), dtype = np.int64)
+            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64)
+            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64)
 
             black_holes_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_holes_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -138,7 +138,7 @@ def make_reorder_file(
             black_holes_backwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
             black_holes_backwards.attrs["h-scale-exponent"]    = np.float64(0.0)
 
-def save_data(filepath: str, particle_type: str, forwards_indexes: np.ndarray, backwards_indexes: np.ndarray) -> None:
+def save_forwards_data(filepath: str, particle_type: str, forwards_indexes: np.ndarray) -> None:
 
     with h5.File(filepath, "a") as file:
 
@@ -146,6 +146,14 @@ def save_data(filepath: str, particle_type: str, forwards_indexes: np.ndarray, b
             raise ValueError(f"{particle_type} does not exist in file {filepath}.")
 
         file[particle_type]["ForwardsIndexes" ][:] = forwards_indexes
+
+def save_backwards_data(filepath: str, particle_type: str, backwards_indexes: np.ndarray) -> None:
+
+    with h5.File(filepath, "a") as file:
+
+        if particle_type not in file:
+            raise ValueError(f"{particle_type} does not exist in file {filepath}.")
+
         file[particle_type]["BackwardsIndexes"][:] = backwards_indexes
 
 
@@ -188,7 +196,7 @@ Calculates the indexing order to move from one set of particle IDs to another.
     args = parser.parse_args()
 
     Console.print_info("Arguments:", flush = True)
-    for key in dict(args):
+    for key in args.__dict__:
         Console.print_info(f"    {key}: {getattr(args, key)}", flush = True)
 
     #----------------------------------|
@@ -313,7 +321,27 @@ Calculates the indexing order to move from one set of particle IDs to another.
 
     for particle_type in ["PartType0", "PartType1", "PartType4", "PartType5"]:
 
+        #-----------------------------------|
+        # Skip particle types not requested |
+        #-----------------------------------|
+
+        if particle_type == "PartType0" and not args.gas:
+            continue
+        if particle_type == "PartType1" and not args.darkmatter:
+            continue
+        if particle_type == "PartType4" and not args.stars:
+            continue
+        if particle_type == "PartType5" and not args.blackholes:
+            continue
+
         Console.print_info(f"Doing {particle_type}:", flush = True)
+
+        if snapshot__source[particle_type] is None or snapshot__source[particle_type]["ParticleIDs"].shape[0] == 0:
+            Console.print_info(f"    No {particle_type} particles in source snapshot. Skipping.", flush = True)
+            continue
+        if snapshot__target[particle_type] is None or snapshot__target[particle_type]["ParticleIDs"].shape[0] == 0:
+            Console.print_info(f"    No {particle_type} particles in target snapshot. Skipping.", flush = True)
+            continue
 
         #-----------|
         # Load data |
@@ -325,19 +353,33 @@ Calculates the indexing order to move from one set of particle IDs to another.
         Console.print_info(f"    Loading target IDs.", flush = True)
         particle_ids__target = snapshot__target[particle_type]["ParticleIDs"].values
 
-        #-------------------|
-        # Calculate reorder |
-        #-------------------|
+        #------------------------------|
+        # Calculate reorder - forwards |
+        #------------------------------|
         Console.print_info(f"    Calculating reorder.", flush = True)
     
-        forwards_indexes, backwards_indexes = calculate_reorder(particle_ids__source, particle_ids__target)
+        forwards_indexes = calculate_reorder(particle_ids__source, particle_ids__target)
 
-        #-----------|
-        # Save data |
-        #-----------|
+        #----------------------|
+        # Save data - forwards |
+        #----------------------|
         Console.print_info(f"    Saving data.", flush = True)
     
-        save_data(output_filepath, particle_type, forwards_indexes, backwards_indexes)
+        save_forwards_data(output_filepath, particle_type, forwards_indexes)
+
+        #-------------------------------|
+        # Calculate reorder - backwards |
+        #-------------------------------|
+        Console.print_info(f"    Calculating reverse reorder.", flush = True)
+    
+        backwards_indexes = calculate_reorder(particle_ids__target, particle_ids__source)
+
+        #-----------------------|
+        # Save data - backwards |
+        #-----------------------|
+        Console.print_info(f"    Saving reverse data.", flush = True)
+    
+        save_backwards_data(output_filepath, particle_type, backwards_indexes)
 
         Console.print_info(f"    Done.", flush = True)
 
