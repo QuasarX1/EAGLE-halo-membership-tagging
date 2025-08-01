@@ -9,3 +9,4 @@ from ._loading_snapshots import load_snapshot
 from ._loading_catalogue_data import load_catalogue
 from ._loading_catalogue_membership import load_catalogue_membership
 from ._save_aux_file import make_aux_file_path, Metadata, make_aux_file, save_chunk
+from ._reorder_particles import calculate_reorder
