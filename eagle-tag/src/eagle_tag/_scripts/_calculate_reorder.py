@@ -161,7 +161,7 @@ def save_backwards_data(filepath: str, particle_type: str, backwards_indexes: np
 def main():
     print(
 """
---|| EAGLE-tag (reorder calculation) ||--
+--|| EAGLE-tag (reorder) ||--
 
 Calculates the indexing order to move from one set of particle IDs to another.
 """,

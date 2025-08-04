@@ -32,10 +32,10 @@ DASK_PORT = 8787
 def main():
     print(
 """
---|| EAGLE-tag ||--
+--|| EAGLE-tag (membership) ||--
 
-Creates snapshot-length files with the catalogue membership
-information for FOF groups and SUBFIND haloes.
+Creates snapshot-length files with the catalogue membership information for FOF groups and SUBFIND
+haloes. Compatible format with Rob Crain's files of the same type.
 """,
     flush = True)
 
