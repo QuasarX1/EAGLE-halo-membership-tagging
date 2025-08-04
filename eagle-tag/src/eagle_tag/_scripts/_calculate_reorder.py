@@ -175,7 +175,7 @@ Calculates the indexing order to move from one set of particle IDs to another.
     #------------------------------|
     Console.print_info("Parsing command line arguments.", flush = True)
 
-    parser = argparse.ArgumentParser(description = "Run EAGLE halo membership tagging.")
+    parser = argparse.ArgumentParser(prog = "eagle-tag reorder", description = "Run EAGLE halo membership tagging.")
 
     parser.add_argument("simulation_directory", type = str,                help = "Directory containing the EAGLE simulation data.")
     parser.add_argument("snapshot_tag_source",  type = str,                help = "Snapshot number (e.g. \"012\").")

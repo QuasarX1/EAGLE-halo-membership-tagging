@@ -47,7 +47,7 @@ haloes. Compatible format with Rob Crain's files of the same type.
     #------------------------------|
     Console.print_info("Parsing command line arguments.", flush = True)
 
-    parser = argparse.ArgumentParser(description = "Run EAGLE halo membership tagging.")
+    parser = argparse.ArgumentParser(prog = "eagle-tag membership", description = "Run EAGLE halo membership tagging.")
 
     parser.add_argument("simulation_directory", type = str,                help = "Directory containing the EAGLE simulation data.")
     parser.add_argument("snapshot_number",      type = str,                help = "Snapshot number (e.g. \"012\").")
