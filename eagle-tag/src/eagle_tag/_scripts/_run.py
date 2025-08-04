@@ -9,14 +9,14 @@ from QuasarCode import Console
 
 from ._translate_membership import main as run_translate_membership
 from ._calculate_reorder import main as run_calculate_reorder
-#from ._track_structure import main as run_track_structure
+from ._track_structure import main as run_track_structure
 
 
 
 commandlets = {
     "membership": run_translate_membership,
     "reorder"   : run_calculate_reorder,
-#    "track"     : run_track_structure,
+    "track"     : run_track_structure,
 }
 
 
@@ -32,15 +32,20 @@ def main():
 
 Suite of software for manipulating EAGLE catalogue data.
 
-usage: eagle-tag [commandlet] [options]
+usage: eagle-tag [commandlet] [options | --help]
        eagle-tag [--help | -h]
 
 Commandlets:
-    help       -> Displays this message.
-    membership -> Generates an auxiliary file tagging all particles with their current group and subhalo membership.
-    reorder    -> Computes the reorder indexes for moving between particle orders.
-    track      -> Tags particles with the properties of the structure of which they were last a member.
 
+    help        ->  Displays this message.
+
+    membership  ->  Generates an auxiliary file tagging all particles with their current group and
+                        subhalo membership.
+
+    reorder     ->  Computes the reorder indexes for moving between particle orders.
+
+    track       ->  Tags particles with the properties of the structure of which they were last a
+                        member.
 """,
             flush = True
         )
