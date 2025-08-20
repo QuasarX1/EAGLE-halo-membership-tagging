@@ -6,7 +6,8 @@ def load_hdf5_files_with_xarray(
     files: tuple[str, ...]|list[str],
     hdf5_group_path: str|None = None,
     datasets: list[str]|None = None,
-    coordinate_dataset: str|None = None
+    coordinate_dataset: str|None = None,
+    override_chunks_in_all_dimensions: int|None = None
 ) -> xr.Dataset:
 
     if datasets is None:
@@ -25,11 +26,18 @@ def load_hdf5_files_with_xarray(
         #    return xr.Dataset({key: (("file_order",), []) for key in file_data.data_vars})  # xarray will skip this file when combining
 
         # Rename the longest (main) dimension to 'file_order' so xarray can concat on it
-        if len(file_data.dims) > 0 and "phony_dim_0" in file_data.dims:
-            #print(file_data.dims)
+        if len(file_data.dims) > 0:
+            available_dim_names = list(file_data.dims.keys())
+            dim_values = []
+            for dim_name in available_dim_names:
+                try:
+                    dim_values.append(int(str(dim_name).rsplit("_", maxsplit = 1)[-1]))
+                except ValueError:
+                    pass
+            target_dim_name = available_dim_names[min(range(len(available_dim_names)), key = lambda x: dim_values[x]) if len(dim_values) > 0 else available_dim_names[0]]
             #main_dim = max(file_data.dims, key = file_data.dims.get)
             #file_data = file_data.rename_dims({ main_dim : "file_order" })
-            file_data = file_data.rename_dims({ "phony_dim_0" : "file_order" })
+            file_data = file_data.rename_dims({ target_dim_name : "file_order" })
             #print(file_data.dims)
             #print()
         else:
@@ -46,14 +54,15 @@ def load_hdf5_files_with_xarray(
         files,
         group      = hdf5_group_path,
         preprocess = preprocess,
-        combine    = "nested",        # Just stack datasets without trying to align them
-        concat_dim = "file_order",    # This was set in `preprocess`
-        chunks     = "auto",          # Respect internal HDF5 chunking
-        phony_dims = "access",        # Fabricate dimensions if not present
-        data_vars  = "minimal",       # Only combine variables that were kept
-        compat     = "override",      #
-        coords     = "minimal",       # Don’t try to infer or align coords across files
-        engine     = "h5netcdf"
+        combine    = "nested",                          # Just stack datasets without trying to align them
+        concat_dim = "file_order",                      # This was set in `preprocess`
+        chunks     = override_chunks_in_all_dimensions, # Respect internal HDF5 chunking
+        phony_dims = "access",                          # Fabricate dimensions if not present
+        data_vars  = "minimal",                         # Only combine variables that were kept
+        compat     = "override",
+        coords     = "minimal",                         # Don’t try to infer or align coords across files
+        engine     = "h5netcdf",
+        #parallel = True
     )
 
     if coordinate_dataset is not None and coordinate_dataset in combined_dataset.data_vars:
