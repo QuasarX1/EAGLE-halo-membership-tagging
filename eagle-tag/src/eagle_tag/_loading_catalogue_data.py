@@ -12,7 +12,8 @@ from ._eagle_filepaths import EAGLE_Snapshot
 def load_catalogue(
         snapshot: EAGLE_Snapshot,
         group_fields:   list[str]|None = None,
-        subfind_fields: list[str]|None = None
+        subfind_fields: list[str]|None = None,
+        subfind_alternate_group_path: str|None = None
 ) -> dict[str, xr.Dataset|None]:
 
     if not snapshot.has_catalogue:
@@ -32,19 +33,20 @@ def load_catalogue(
             data_in_files[i][1] = file["Header"].attrs["Nsubgroups"] > 0
     any_data_present = np.any(data_in_files, axis = 0)
 
-    if group_fields is None:
-        group_fields = ["FirstSubhaloID", "NumOfSubhalos"]
-    if "FirstSubhaloID" not in group_fields:
-        group_fields = ["FirstSubhaloID", *group_fields]
-    if "NumOfSubhalos" not in group_fields:
-        group_fields = ["NumOfSubhalos", *group_fields]
-
-    if subfind_fields is None:
-        subfind_fields = ["Mass"]
-    elif "Mass" not in subfind_fields:
-        subfind_fields = ["Mass", *subfind_fields]
-
     return {
-        "FOF"     : load_hdf5_pattern_with_xarray(filepath_pattern, "FOF",     group_fields,   skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]]) if any_data_present[0] else None,
-        "Subhalo" : load_hdf5_pattern_with_xarray(filepath_pattern, "Subhalo", subfind_fields, skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]]) if any_data_present[1] else None,
+
+        "FOF" : load_hdf5_pattern_with_xarray(
+            filepath_pattern,
+            "FOF",
+            group_fields,
+            skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]]
+        ) if group_fields is not None and any_data_present[0] else None,
+
+        "Subhalo" : load_hdf5_pattern_with_xarray(
+            filepath_pattern,
+            f"Subhalo/{subfind_alternate_group_path}" if subfind_alternate_group_path is not None else "Subhalo",
+            subfind_fields,
+            skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]]
+        ) if subfind_fields is not None and any_data_present[1] else None,
+
     }
