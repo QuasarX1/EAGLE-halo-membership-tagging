@@ -54,8 +54,8 @@ def load_snapshot(
         black_hole_fields = ["ParticleIDs", *black_hole_fields]
 
     return {
-        "PartType0" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType0", gas_fields,         skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]]) if any_data_present[0] else None,
-        "PartType1" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType1", dark_matter_fields, skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]]) if any_data_present[1] else None,
-        "PartType4" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType4", star_fields,        skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][4]]) if any_data_present[4] else None,
-        "PartType5" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType5", black_hole_fields,  skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][5]]) if any_data_present[5] else None,
+        "PartType0" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType0", gas_fields,         skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[0] else None,
+        "PartType1" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType1", dark_matter_fields, skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[1] else None,
+        "PartType4" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType4", star_fields,        skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][4]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[4] else None,
+        "PartType5" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType5", black_hole_fields,  skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][5]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[5] else None,
     }
