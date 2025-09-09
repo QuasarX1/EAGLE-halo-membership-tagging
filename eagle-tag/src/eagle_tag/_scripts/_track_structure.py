@@ -960,7 +960,7 @@ Tags particles with the properties of the structure of which they were last a me
             Console.print_verbose_info("            FOF mask.")
             fof_update_mask: xr.DataArray
             if fof_groups_present:
-                groups_with_subgroups: xr.DataArray = xr.where(catalogue_data["FOF"]["NumOfSubhalos"].isel(catalogue_fof_index = membership["GroupNumber"] - 1) > 0, True, False)
+                groups_with_subgroups: xr.DataArray = xr.where(catalogue_data["FOF"]["HaloM200Crit"].isel(catalogue_fof_index = membership["GroupNumber"] - 1) > 0.0, True, False)
                 fof_update_mask = xr.where(membership["GroupNumber"] != NULL_INDEX, groups_with_subgroups, False)
             else:
                 fof_update_mask = xr.DataArray(
