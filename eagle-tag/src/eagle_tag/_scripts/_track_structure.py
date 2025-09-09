@@ -7,6 +7,7 @@ import errno
 import os
 import socket
 import sys
+from typing import Callable
 
 import dask
 from dask import delayed, compute
@@ -630,17 +631,33 @@ Tags particles with the properties of the structure of which they were last a me
     #---------------------------------|
     Console.print_verbose_info("Processing requested fields.")
 
-    fof_group_fields_default: dict[str, str] = {
-        "HaloMass"     : "GroupMass",
-        "HaloM200Crit" : "Group_M_Crit200",
-    }
-    fof_group_fields_user: dict[str, str] = { field : settings.group[field] for field in settings.group.keys if field not in fof_group_fields_default } if settings.group is not None else {}
-    fof_group_fields: dict[str, str] = fof_group_fields_default | fof_group_fields_user
-    fof_group_field_names_for_reading: tuple[str, ...] = tuple(list(set(fof_group_fields.values()) | {"NumOfSubhalos"}) + ["FirstSubhaloID"]) # FirstSubhaloID is needed to calculate the true index for subhaloes
+    def parse_target_field(field_expression: str) -> tuple[str, tuple[int, ...]|None]:
+        has_open_bracket = "[" in field_expression
+        has_close_bracket = "]" in field_expression
+        is_valid = (has_open_bracket and has_open_bracket) or (not has_open_bracket and not has_open_bracket)
+        if not is_valid:
+            raise ValueError(f"Name of target field (\"{field_expression}\") contained either \"[\" or \"]\" but not both.")
 
-    subgroup_fields_user_all: dict[str, str] = { field : settings.subhalo[field] for field in settings.subhalo.keys } if settings.subhalo is not None else {}
-    subgroup_fields_user_centrals: dict[str, str] = { field : settings.central[field] for field in settings.central.keys } if settings.central is not None else {}
-    subgroup_field_names_for_reading: tuple[str, ...] = tuple(set(subgroup_fields_user_all.values()) | set(subgroup_fields_user_centrals.values()))
+        if has_open_bracket:
+            name, indexes = field_expression.replace("]", "").split("[", 1)
+            if indexes.strip() == "":
+                raise ValueError("Target field contained indexer expression, but no indexes.")
+            return (name, tuple([int(index) for index in indexes.split(",")]))
+
+        else:
+            return (field_expression, None)
+
+    fof_group_fields_default: dict[str, tuple[str, tuple[int, ...]|None]] = {
+        "HaloMass"     : ("GroupMass",       None),
+        "HaloM200Crit" : ("Group_M_Crit200", None),
+    }
+    fof_group_fields_user: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.group[field]) for field in settings.group.keys if field not in fof_group_fields_default } if settings.group is not None else {}
+    fof_group_fields: dict[str, tuple[str, tuple[int, ...]|None]] = fof_group_fields_default | fof_group_fields_user
+    fof_group_field_names_for_reading: tuple[str, ...] = tuple(list(set([v[0] for v in fof_group_fields.values()]) | {"NumOfSubhalos"}) + ["FirstSubhaloID"]) # FirstSubhaloID is needed to calculate the true index for subhaloes
+
+    subgroup_fields_user_all: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.subhalo[field]) for field in settings.subhalo.keys } if settings.subhalo is not None else {}
+    subgroup_fields_user_centrals: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.central[field]) for field in settings.central.keys } if settings.central is not None else {}
+    subgroup_field_names_for_reading: tuple[str, ...] = tuple(set([v[0] for v in subgroup_fields_user_all.values()]) | set([v[0] for v in subgroup_fields_user_centrals.values()]))
     subgroups_with_nested_fields: tuple[bool, ...] = tuple(["/" in field_path.strip("/") for field_path in subgroup_field_names_for_reading])
     subgroup_fields_include_nested: bool = any(subgroups_with_nested_fields)
     if subgroup_fields_include_nested:
@@ -787,13 +804,13 @@ Tags particles with the properties of the structure of which they were last a me
             "HaloM200Crit"        : np.float32,
         }
         with h5.File(snapshot_files.catalogue_file_template.format(0), "r") as file:
-            for output_name, catalogue_field in fof_group_fields_user.items():
+            for output_name, (catalogue_field, _) in fof_group_fields_user.items():
                 field_widths[output_name]    = file["FOF"][catalogue_field].shape[-1] if len(file["FOF"][catalogue_field].shape) > 1 else 1
                 field_datatypes[output_name] = file["FOF"][catalogue_field].dtype.type
-            for output_name, catalogue_field in subgroup_fields_user_all.items():
+            for output_name, (catalogue_field, _) in subgroup_fields_user_all.items():
                 field_widths[output_name]    = file["Subhalo"][catalogue_field].shape[-1] if len(file["Subhalo"][catalogue_field].shape) > 1 else 1
                 field_datatypes[output_name] = file["Subhalo"][catalogue_field].dtype.type
-            for output_name, catalogue_field in subgroup_fields_user_centrals.items():
+            for output_name, (catalogue_field, _) in subgroup_fields_user_centrals.items():
                 field_widths[output_name]    = file["Subhalo"][catalogue_field].shape[-1] if len(file["Subhalo"][catalogue_field].shape) > 1 else 1
                 field_datatypes[output_name] = file["Subhalo"][catalogue_field].dtype.type
 
@@ -1080,36 +1097,72 @@ Tags particles with the properties of the structure of which they were last a me
                         Console.print_debug("                Writing to cache.")
                         #Console.print_debug("                Calculating and writing to cache.")
 
-                        if settings.max_size_to_write is None:
+                        # Number of gigabytes of data per row * number of rows
+                        total_gigabytes: Callable[[int], float] = lambda rows: rows * np.array(cached_data[field].shape[1:]).prod() * cached_data[field].dtype.itemsize / 1024**3
+
+                        if settings.max_size_to_write is None or total_gigabytes(cached_data[field].sizes["snapshot_particle_index"]) <= settings.max_size_to_write:
+                            # Just write the data in one go using xarray
                             cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
+                            # This may fail if there is little remaining memory available.
+                            # In such a case, set a maximum size that is sufficiently small to enable the below section.
 
                         else:
+                            # (at least) One of the data sets is too large to write in one go using xarray due to memory constrains.
+                            # This is most likley to happen when tracking 2D data sets.
+                            # In this case, the maximum amount of data that can be written in one go is limited by the user.
+                            # Each write operation using xarray should only attempt to write a number of rows with a total data size less than the limit.
+                            # Note: in the event the chunks are too large / limit is too small, a warning is issued and the entirety of the oversize chunk(s) will be written as a single operation.
+    
+                            # Prepare somwhere to put the data on disk - dosen't actually write any data!
                             cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type, compute = False)
+
+                            # Get information about the dask chunking of the target data.
+                            # We only want to write whole chunks!
+                            #TODO: should this be zarr chunks instead of dask ones?!
                             chunk_lengths = np.array(cached_data.chunksizes["snapshot_particle_index"], dtype = np.int64)
                             chunk_lengths_endpoints = np.cumsum(chunk_lengths)
-                            if (chunk_lengths > settings.max_size_to_write).any():
+                            # Raise an error if any chunks exceed the limit.
+                            if (total_gigabytes(chunk_lengths) > settings.max_size_to_write).any():
+                                Console.print_debug(f"Chunk lengths: {", ".join(map(str, chunk_lengths))}")
                                 Console.print_warning(f"One or more data chunks exceed the maximum write size of {settings.max_size_to_write} GB.")
+
+                            # Pre-calculate what the start and endpoints are for each write operation.
                             start_positions: list[int] = []
                             end_positions:   list[int] = []
                             chunk_offset:    int       = 0
                             while (end_positions[-1] if len(end_positions) > 0 else 0) < cached_data.dims["snapshot_particle_index"]:
-                                remaining_chunk_sizes = chunk_lengths[chunk_offset:]
+                                # Initialise counters for this operation.
                                 number_of_chunks: int = 0
                                 selected_length:  int = 0
-                                while selected_length * cached_data[field].dtype.itemsize / 1024**3 < settings.max_size_to_write and chunk_offset + number_of_chunks < len(chunk_lengths):
+                                # Increment counters until they overflow the data limit or pass the number of chunks avalible.
+                                while total_gigabytes(selected_length) < settings.max_size_to_write and chunk_offset + number_of_chunks < len(chunk_lengths):
                                     number_of_chunks += 1
-                                    selected_length = remaining_chunk_sizes[:number_of_chunks].sum()
+                                    selected_length = chunk_lengths[chunk_offset : chunk_offset + number_of_chunks].sum()
                                 if number_of_chunks == 0:
-                                    number_of_chunks = 1 # Do at least one!
-                                if selected_length  * cached_data[field].dtype.itemsize / 1024**3 > settings.max_size_to_write:
-                                    number_of_chunks -= 1 # The last chunk added too much data - walk it back by one
-                                    # The `selected_length` isn't used after this point, so no need to fix its value
+                                    # If the next chunk is too large, do one chunk anyway!
+                                    number_of_chunks = 1
+                                if total_gigabytes(selected_length) > settings.max_size_to_write:
+                                    # Chances are the last chunk's data didn't reach the limit exactly, so walk back by one chunk.
+                                    number_of_chunks -= 1
+                                    # The `selected_length` isn't used after this point, so no need to fix its value.
+                                # Update the list of start and endpoints.
                                 start_positions.append(chunk_lengths_endpoints[chunk_offset] - chunk_lengths[chunk_offset]) # The start index of the current start chunk
-                                end_positions.append(chunk_lengths_endpoints[chunk_offset + number_of_chunks]) # The end index of the last chunk in the selected group
+                                end_positions.append(chunk_lengths_endpoints[chunk_offset + number_of_chunks - 1]) # The end index of the last chunk in the selected group
+                                Console.print_debug(f"Chunks: {number_of_chunks}, Size: {total_gigabytes(end_positions[-1] - start_positions[-1])} GB, i: {start_positions[-1]} -> {end_positions[-1]}")
+
+                                # Move the offset to the next unselected chunk.
                                 chunk_offset += number_of_chunks
+
+                            # Loop over each write operation.
                             for start, end in zip(start_positions, end_positions):
-                                cached_data.isel(snapshot_particle_index = slice(start, end)).to_zarr(reorder_cache_filepath, mode = "a", group = particle_type, region = { "snapshot_particle_index" : slice(start, end) })
-                        Console.print_debug("                Done.")
+                                cached_data.isel(
+                                    snapshot_particle_index = slice(start, end) # Select only the section of the total data that should be written.
+                                ).to_zarr(
+                                    reorder_cache_filepath, mode = "a", group = particle_type,
+                                    region = { "snapshot_particle_index" : slice(start, end) } # Write to only the target section of the zarr data store.
+                                )
+
+                        Console.print_debug("                Done.") # Just to make the debug statements clear.
 
                     # Run a test to ensure data reordering is working correctly:
                     #Console.print_debug("Running reorder test:")
@@ -1127,10 +1180,6 @@ Tags particles with the properties of the structure of which they were last a me
                     #Console.print_debug("    Testing for mismatches.")
                     #Console.print_debug("    Number of mismatched IDs:", (test_reordered_particle_ids != membership["ParticleIDs"]).sum().values)
 
-                    #TODO: moved here for testing - remove and uncomment below
-                    for field in subgroup_fields_user_centrals:
-                        reorder_and_cache_field(field)
-
                     reorder_and_cache_field("GroupNumber")
                     reorder_and_cache_field("LastGroupRedshift")
                     reorder_and_cache_field("FirstSubhaloID")
@@ -1139,8 +1188,8 @@ Tags particles with the properties of the structure of which they were last a me
                     reorder_and_cache_field("LastSubhaloRedshift")
                     for field in fof_group_fields:
                         reorder_and_cache_field(field)
-                    #for field in subgroup_fields_user_centrals:
-                    #    reorder_and_cache_field(field)
+                    for field in subgroup_fields_user_centrals:
+                        reorder_and_cache_field(field)
                     for field in subgroup_fields_user_all:
                         reorder_and_cache_field(field)
 
@@ -1365,14 +1414,20 @@ Tags particles with the properties of the structure of which they were last a me
             Console.print_verbose_info("            FOF indexes from GroupNumber.")
             halo_update_indexes = (membership["GroupNumber"] - 1).where(fof_update_mask, other = NULL_INDEX)
 
-            def get_catalogue_fof_data_by_particle(field: str, fill_value = None) -> xr.DataArray:
-                return catalogue_data["FOF"][field].isel(catalogue_fof_index = halo_update_indexes).where(fof_update_mask, other = fill_value)
+            def get_catalogue_fof_data_by_particle(field: str, fill_value = None, indexes: tuple[int, ...]|None = None) -> xr.DataArray:
+                target = catalogue_data["FOF"][field]
+                if indexes is not None:
+                    target = target.isel(particle_type_number = list(indexes) if len(indexes) > 1 else indexes[0], drop = True)
+                return target.isel(catalogue_fof_index = halo_update_indexes).where(fof_update_mask, other = fill_value)
 
             Console.print_verbose_info("            Subhalo indexes for centrals.")
             central_subhalo_update_indexes = get_catalogue_fof_data_by_particle("FirstSubhaloID", fill_value = NULL_INDEX)
 
-            def get_catalogue_central_subhalo_data_by_particle(field: str, fill_value = None) -> xr.DataArray:
-                result = catalogue_data["Subhalo"][field].isel(catalogue_subhalo_index = central_subhalo_update_indexes).where(fof_update_mask, other = fill_value)
+            def get_catalogue_central_subhalo_data_by_particle(field: str, fill_value = None, indexes: tuple[int, ...]|None = None) -> xr.DataArray:
+                target = catalogue_data["Subhalo"][field]
+                if indexes is not None:
+                    target = target.isel(particle_type_number = list(indexes) if len(indexes) > 1 else indexes[0], drop = True)
+                result = target.isel(catalogue_subhalo_index = central_subhalo_update_indexes).where(fof_update_mask, other = fill_value)
                 #if len(result.dims) > 1:
                 #    result = result.rename({
                 #        result.dims[1] : "particle_type_number"
@@ -1382,8 +1437,11 @@ Tags particles with the properties of the structure of which they were last a me
             Console.print_verbose_info("            Subhalo indexes from FirstSubhaloID and SubGroupNumber.")
             subhalo_update_indexes = (catalogue_data["FOF"]["FirstSubhaloID"].isel(catalogue_fof_index = membership["GroupNumber"] - 1) + membership["SubGroupNumber"]).where(subhalo_update_mask, other = NULL_INDEX)
 
-            def get_catalogue_subhalo_data_by_particle(field: str, fill_value = None) -> xr.DataArray:
-                result = catalogue_data["Subhalo"][field].isel(catalogue_subhalo_index = subhalo_update_indexes).where(subhalo_update_mask, other = fill_value)
+            def get_catalogue_subhalo_data_by_particle(field: str, fill_value = None, indexes: tuple[int, ...]|None = None) -> xr.DataArray:
+                target = catalogue_data["Subhalo"][field]
+                if indexes is not None:
+                    target = target.isel(particle_type_number = list(indexes) if len(indexes) > 1 else indexes[0], drop = True)
+                result = target.isel(catalogue_subhalo_index = subhalo_update_indexes).where(subhalo_update_mask, other = fill_value)
                 #if len(result.dims) > 1:
                 #    result = result.rename({
                 #        result.dims[1] : "particle_type_number"
@@ -1467,34 +1525,34 @@ Tags particles with the properties of the structure of which they were last a me
             )
             Console.print_verbose_info(f"                Shape: {updated_data["LastSubhaloRedshift"].shape}")
 
-            for field, catalogue_field in fof_group_fields.items():
+            for field, (catalogue_field, column_indexes) in fof_group_fields.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
-                    dims = "snapshot_particle_index" if len(catalogue_data["FOF"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_fof_data_by_particle(catalogue_field), fof_update_mask),
+                    dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["FOF"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                    data = insert_existing_data(field, get_catalogue_fof_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask),
                     attrs = {
                     }
                 )
                 Console.print_verbose_info(f"                Shape: {updated_data[field].shape}")
 
-            for field, catalogue_field in subgroup_fields_user_centrals.items():
+            for field, (catalogue_field, column_indexes) in subgroup_fields_user_centrals.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
-                    dims = "snapshot_particle_index" if len(catalogue_data["Subhalo"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_central_subhalo_data_by_particle(catalogue_field), fof_update_mask),
+                    dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                    data = insert_existing_data(field, get_catalogue_central_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask),
                     attrs = {
                     }
                 )
                 Console.print_verbose_info(f"                Shape: {updated_data[field].shape}")
 
-            for field, catalogue_field in subgroup_fields_user_all.items():
+            for field, (catalogue_field, column_indexes) in subgroup_fields_user_all.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
-                    dims = "snapshot_particle_index" if len(catalogue_data["Subhalo"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_subhalo_data_by_particle(catalogue_field), subhalo_update_mask),
+                    dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                    data = insert_existing_data(field, get_catalogue_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), subhalo_update_mask),
                     attrs = {
                     }
                 )
