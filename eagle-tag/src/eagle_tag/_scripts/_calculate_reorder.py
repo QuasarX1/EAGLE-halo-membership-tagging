@@ -6,6 +6,7 @@
 import argparse
 import errno
 import os
+from socket
 
 import dask
 from dask import delayed, compute
@@ -236,17 +237,25 @@ Calculates the indexing order to move from one set of particle IDs to another.
     snapshot_files__source: EAGLE_Snapshot = files.snapshot(tag = tag__source, snipshot = args.snipshots or args.source_is_snipshot)
     snapshot_files__target: EAGLE_Snapshot = files.snapshot(tag = tag__target, snipshot = args.snipshots or args.target_is_snipshot)
 
-#    #--------------------|
-#    # Start dask cluster |
-#    #--------------------|
-#    Console.print_info("Creating directory paths.", flush = True)
-#
-#    cluster = LocalCluster(
-#        n_workers = DASK_WORKERS,
-#        memory_limit = DASK_MEMORY_LIMIT_PER_WORKER,
-#        dashboard_address = f":{DASK_PORT}"
-#    )
-#    client = cluster.get_client()
+    #--------------------|
+    # Start dask cluster |
+    #--------------------|
+    if DASK_WORKERS > 0:
+        Console.print_info("Starting dask cluster.", flush = True)
+
+        cluster = LocalCluster(
+            n_workers = DASK_WORKERS,
+            memory_limit = f"{DASK_MEMORY_LIMIT_PER_WORKER}GB",
+            dashboard_address = f":{DASK_PORT}" if DASK_PORT is not None else None
+        )
+        client = cluster.get_client()
+
+        Console.print_info(f"Dask cluster running with {DASK_WORKERS} workers each allocated {DASK_MEMORY_LIMIT_PER_WORKER} GB of memory.")
+
+        if DASK_PORT is not None:
+            Console.print_info(f"Dask dashboard available at {socket.gethostname()}:{DASK_PORT}")
+        else:
+            Console.print_verbose_info("No dask dashboard (dask_port was set to null).")
 
     #----------------|
     # Load snapshots |

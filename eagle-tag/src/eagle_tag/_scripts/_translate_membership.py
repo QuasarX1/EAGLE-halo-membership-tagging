@@ -5,6 +5,7 @@
 
 import argparse
 import os
+import socket
 
 import dask
 from dask import delayed, compute
@@ -99,17 +100,25 @@ haloes. Compatible format with Rob Crain's files of the same type.
     snapshot_first_file_path = snapshot_files.snapshot_file_template.format(0)#os.path.join(snapshot_directory, f"sn{'i' if args.snipshot else 'a'}p_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
     catalogue_membership_first_file_path = snapshot_files.catalogue_membership_file_template.format(0)#os.path.join(catalogue_membership_directory, f"eagle_subfind_{'snip_' if args.snipshot else ''}particles_{args.snapshot_number}_{args.snapshot_tag}.0.hdf5")
 
-#    #--------------------|
-#    # Start dask cluster |
-#    #--------------------|
-#    Console.print_info("Creating directory paths.", flush = True)
-#
-#    cluster = LocalCluster(
-#        n_workers = DASK_WORKERS,
-#        memory_limit = DASK_MEMORY_LIMIT_PER_WORKER,
-#        dashboard_address = f":{DASK_PORT}"
-#    )
-#    client = cluster.get_client()
+    #--------------------|
+    # Start dask cluster |
+    #--------------------|
+    if DASK_WORKERS > 0:
+        Console.print_info("Starting dask cluster.", flush = True)
+
+        cluster = LocalCluster(
+            n_workers = DASK_WORKERS,
+            memory_limit = f"{DASK_MEMORY_LIMIT_PER_WORKER}GB",
+            dashboard_address = f":{DASK_PORT}" if DASK_PORT is not None else None
+        )
+        client = cluster.get_client()
+
+        Console.print_info(f"Dask cluster running with {DASK_WORKERS} workers each allocated {DASK_MEMORY_LIMIT_PER_WORKER} GB of memory.")
+
+        if DASK_PORT is not None:
+            Console.print_info(f"Dask dashboard available at {socket.gethostname()}:{DASK_PORT}")
+        else:
+            Console.print_verbose_info("No dask dashboard (dask_port was set to null).")
 
     #----------------------------------------|
     # Load snapshot and catalogue membership |
