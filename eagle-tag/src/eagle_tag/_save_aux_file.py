@@ -69,15 +69,30 @@ def make_aux_file(
         header.attrs["NumPart_ThisFile"]    = np.array(metadata.header_num_part_this_file, dtype = np.int64)
         header.attrs["NumPart_Total"]       = np.array(metadata.header_num_part_total, dtype = np.int64)
 
+        # Define chunking
+        chunking_kwargs = {
+            "chunks"           : (1024 * 8,),
+            "compression"      : "gzip",
+            "compression_opts" : 8,
+            "fletcher32"       : True
+        }
+        def chunking_kwargs_alt(length: int) -> dict[str, object]:
+            return{
+                "chunks"           : (length if length < 8 else int(length / 8),),
+                "compression"      : "gzip",
+                "compression_opts" : 8,
+                "fletcher32"       : True
+            }
+
         # Create gas datasets and assign attributes
 
         if number_of_gas_particles is not None:
 
             gas = file.create_group("PartType0")
 
-            gas_group_number     = gas.create_dataset("GroupNumber",    shape = (number_of_gas_particles,), dtype = np.int32)
-            gas_particle_ids     = gas.create_dataset("ParticleIDs",    shape = (number_of_gas_particles,), dtype = np.int64)
-            gas_sub_group_number = gas.create_dataset("SubGroupNumber", shape = (number_of_gas_particles,), dtype = np.int32)
+            gas_group_number     = gas.create_dataset("GroupNumber",    shape = (number_of_gas_particles,), dtype = np.int32, **chunking_kwargs)
+            gas_particle_ids     = gas.create_dataset("ParticleIDs",    shape = (number_of_gas_particles,), dtype = np.int64, **chunking_kwargs)
+            gas_sub_group_number = gas.create_dataset("SubGroupNumber", shape = (number_of_gas_particles,), dtype = np.int32, **chunking_kwargs)
 
             gas_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             gas_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -97,9 +112,9 @@ def make_aux_file(
 
             dark_matter = file.create_group("PartType1")
 
-            dark_matter_group_number     = dark_matter.create_dataset("GroupNumber",    shape = (number_of_dark_matter_particles,), dtype = np.int32)
-            dark_matter_particle_ids     = dark_matter.create_dataset("ParticleIDs",    shape = (number_of_dark_matter_particles,), dtype = np.int64)
-            dark_matter_sub_group_number = dark_matter.create_dataset("SubGroupNumber", shape = (number_of_dark_matter_particles,), dtype = np.int32)
+            dark_matter_group_number     = dark_matter.create_dataset("GroupNumber",    shape = (number_of_dark_matter_particles,), dtype = np.int32, **chunking_kwargs)
+            dark_matter_particle_ids     = dark_matter.create_dataset("ParticleIDs",    shape = (number_of_dark_matter_particles,), dtype = np.int64, **chunking_kwargs)
+            dark_matter_sub_group_number = dark_matter.create_dataset("SubGroupNumber", shape = (number_of_dark_matter_particles,), dtype = np.int32, **chunking_kwargs)
 
             dark_matter_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             dark_matter_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -119,9 +134,9 @@ def make_aux_file(
 
             stars = file.create_group("PartType4")
 
-            stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32)
-            stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64)
-            stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32)
+            stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
+            stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
+            stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
 
             stars_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -141,9 +156,9 @@ def make_aux_file(
 
             black_holes = file.create_group("PartType5")
 
-            black_hole_group_number     = black_holes.create_dataset("GroupNumber",    shape = (number_of_black_hole_particles,), dtype = np.int32)
-            black_hole_particle_ids     = black_holes.create_dataset("ParticleIDs",    shape = (number_of_black_hole_particles,), dtype = np.int64)
-            black_hole_sub_group_number = black_holes.create_dataset("SubGroupNumber", shape = (number_of_black_hole_particles,), dtype = np.int32)
+            black_hole_group_number     = black_holes.create_dataset("GroupNumber",    shape = (number_of_black_hole_particles,), dtype = np.int32, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles)))
+            black_hole_particle_ids     = black_holes.create_dataset("ParticleIDs",    shape = (number_of_black_hole_particles,), dtype = np.int64, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles)))
+            black_hole_sub_group_number = black_holes.create_dataset("SubGroupNumber", shape = (number_of_black_hole_particles,), dtype = np.int32, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles))
 
             black_hole_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_hole_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
