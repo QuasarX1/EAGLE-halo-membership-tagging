@@ -128,8 +128,8 @@ def make_reorder_file(
 
             stars = file.create_group("PartType4")
 
-            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64, **chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else **chunking_kwargs_alt(number_of_particles__target[4]))
-            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else **chunking_kwargs_alt(number_of_particles__target[4]))
+            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4])))
+            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4])))
 
             stars_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -143,8 +143,8 @@ def make_reorder_file(
 
             black_holes = file.create_group("PartType5")
 
-            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64, **chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else **chunking_kwargs_alt(number_of_particles__target[5]))
-            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else **chunking_kwargs_alt(number_of_particles__target[5]))
+            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5])))
+            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5])))
 
             black_holes_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_holes_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)

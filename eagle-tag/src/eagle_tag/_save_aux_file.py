@@ -134,9 +134,9 @@ def make_aux_file(
 
             stars = file.create_group("PartType4")
 
-            stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
-            stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
-            stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32, **chunking_kwargs if number_of_star_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_star_particles))
+            stars_group_number     = stars.create_dataset("GroupNumber",    shape = (number_of_star_particles,), dtype = np.int32, **(chunking_kwargs if number_of_star_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_star_particles)))
+            stars_particle_ids     = stars.create_dataset("ParticleIDs",    shape = (number_of_star_particles,), dtype = np.int64, **(chunking_kwargs if number_of_star_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_star_particles)))
+            stars_sub_group_number = stars.create_dataset("SubGroupNumber", shape = (number_of_star_particles,), dtype = np.int32, **(chunking_kwargs if number_of_star_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_star_particles)))
 
             stars_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -156,9 +156,9 @@ def make_aux_file(
 
             black_holes = file.create_group("PartType5")
 
-            black_hole_group_number     = black_holes.create_dataset("GroupNumber",    shape = (number_of_black_hole_particles,), dtype = np.int32, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles)))
-            black_hole_particle_ids     = black_holes.create_dataset("ParticleIDs",    shape = (number_of_black_hole_particles,), dtype = np.int64, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles)))
-            black_hole_sub_group_number = black_holes.create_dataset("SubGroupNumber", shape = (number_of_black_hole_particles,), dtype = np.int32, **chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else **chunking_kwargs_alt(number_of_black_hole_particles))
+            black_hole_group_number     = black_holes.create_dataset("GroupNumber",    shape = (number_of_black_hole_particles,), dtype = np.int32, **(chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_black_hole_particles)))
+            black_hole_particle_ids     = black_holes.create_dataset("ParticleIDs",    shape = (number_of_black_hole_particles,), dtype = np.int64, **(chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_black_hole_particles)))
+            black_hole_sub_group_number = black_holes.create_dataset("SubGroupNumber", shape = (number_of_black_hole_particles,), dtype = np.int32, **(chunking_kwargs if number_of_black_hole_particles >= 1024 * 8 else chunking_kwargs_alt(number_of_black_hole_particles)))
 
             black_hole_group_number.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_hole_group_number.attrs["aexp-scale-exponent"] = np.float64(0.0)
