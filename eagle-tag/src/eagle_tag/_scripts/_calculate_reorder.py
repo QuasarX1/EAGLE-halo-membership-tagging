@@ -6,7 +6,7 @@
 import argparse
 import errno
 import os
-from socket
+import socket
 
 import dask
 from dask import delayed, compute
