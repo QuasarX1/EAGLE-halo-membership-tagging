@@ -8,7 +8,7 @@ def load_hdf5_files_with_xarray(
     hdf5_group_path: str|None = None,
     datasets: list[str]|None = None,
     coordinate_dataset: str|None = None,
-    override_chunks_in_all_dimensions: int|str|None = None,
+    override_chunks_in_all_dimensions: int|str|None = "auto",
     dimension_sizes: dict[str, int|None]|None = None,
     concatenation_dimension_index: int|None = None # Set this if the length of the concatenation dimension matches the length of another dimension
 ) -> xr.Dataset:
@@ -131,7 +131,7 @@ def load_hdf5_pattern_with_xarray(
     datasets: list[str]|None = None,
     coordinate_dataset: str|None = None,
     skip_values: list[str]|None = None,
-    override_chunks_in_all_dimensions: int|str|None = None,
+    override_chunks_in_all_dimensions: int|str|None = "auto",
     dimension_sizes: dict[str, int|None]|None = None,
     concatenation_dimension_index: int|None = None # Set this if the length of the concatenation dimension matches the length of another dimension
 ) -> xr.Dataset:
