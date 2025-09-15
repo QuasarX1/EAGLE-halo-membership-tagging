@@ -5,6 +5,7 @@
 import h5py as h5
 import xarray as xr
 import numpy as np
+from QuasarCode import Console
 
 from ._load_data_with_xarray import load_hdf5_pattern_with_xarray
 from ._eagle_filepaths import EAGLE_Snapshot
@@ -32,6 +33,8 @@ def load_snapshot(
         with h5.File(filepath_template.format(i), "r") as file:
             data_in_files[i][:] = file["Header"].attrs["NumPart_ThisFile"] > 0
     any_data_present = np.any(data_in_files, axis = 0)
+    Console.print_debug(data_in_files)
+    Console.print_debug(any_data_present)
 
     if gas_fields is None:
         gas_fields = ["ParticleIDs"]
@@ -54,8 +57,8 @@ def load_snapshot(
         black_hole_fields = ["ParticleIDs", *black_hole_fields]
 
     return {
-        "PartType0" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType0", gas_fields,         skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[0] else None,
-        "PartType1" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType1", dark_matter_fields, skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[1] else None,
-        "PartType4" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType4", star_fields,        skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][4]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[4] else None,
-        "PartType5" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType5", black_hole_fields,  skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][5]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }) if any_data_present[5] else None,
+        "PartType0" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType0", gas_fields,         skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][0]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }, concatenation_dimension_index = 0) if any_data_present[0] else None,
+        "PartType1" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType1", dark_matter_fields, skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][1]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }, concatenation_dimension_index = 0) if any_data_present[1] else None,
+        "PartType4" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType4", star_fields,        skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][4]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }, concatenation_dimension_index = 0) if any_data_present[4] else None,
+        "PartType5" : load_hdf5_pattern_with_xarray(filepath_pattern, "PartType5", black_hole_fields,  skip_values = [str(i) for i in range(number_of_files) if not data_in_files[i][5]], dimension_sizes = { "snapshot_particle_index" : None, "box_axis_index" : 3 }, concatenation_dimension_index = 0) if any_data_present[5] else None,
     }
