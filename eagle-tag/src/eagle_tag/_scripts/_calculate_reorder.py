@@ -17,17 +17,13 @@ from dask.distributed import LocalCluster
 from dask.utils import SerializableLock
 import numpy as np
 import h5py as h5
-from QuasarCode import Console
+from QuasarCode import Console, Settings
 
 from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, load_snapshot, calculate_reorder
 
 
 
 NULL_INDEX = 2**30 # Used where an integer index needs to be NULL
-
-DASK_WORKERS = 64
-DASK_MEMORY_LIMIT_PER_WORKER = 8 # GB
-DASK_PORT = 8787
 
 
 
@@ -128,8 +124,8 @@ def make_reorder_file(
 
             stars = file.create_group("PartType4")
 
-            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4])))
-            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4])))
+            stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4]) if number_of_particles__target[4] > 0 else {}))
+            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4]) if number_of_particles__target[4] > 0 else {}))
 
             stars_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -143,8 +139,8 @@ def make_reorder_file(
 
             black_holes = file.create_group("PartType5")
 
-            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5])))
-            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5])))
+            black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5]) if number_of_particles__target[5] > 0 else {}))
+            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5]) if number_of_particles__target[5] > 0 else {}))
 
             black_holes_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_holes_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -193,24 +189,34 @@ Calculates the indexing order to move from one set of particle IDs to another.
 
     parser = argparse.ArgumentParser(prog = "eagle-tag reorder", description = "Run EAGLE halo membership tagging.")
 
-    parser.add_argument("simulation_directory",         type = str,                help = "Directory containing the EAGLE simulation data.")
-    parser.add_argument("snapshot_tag_source",          type = str,                help = "Snapshot number (e.g. \"012\").")
-    parser.add_argument("snapshot_tag_target",          type = str,                help = "Snapshot redshift tag (e.g. \"z012p345\").")
-    #parser.add_argument("--output-directory",   "-o",  type = str, default = ".", help = "Directory in which to create the output file. Default is the current working directory.")
-    parser.add_argument("output_directory",             type = str, default = ".", help = "Alternate directory in which to create the output file.")
-    parser.add_argument("--source-is-snipshot",         action  = "store_true",    help = "Source is a snapshot.")
-    parser.add_argument("--target-is-snipshot",         action  = "store_true",    help = "target is a snapshot.")
-    parser.add_argument("--snipshots",                  action  = "store_true",    help = "Both source and target files are snipshots. This is the same as specifying both --source-is-snipshot and --target-is-snipshot.")
-    parser.add_argument("--overwrite",                  action  = "store_true",    help = "Overwrite existing output files.")
-    parser.add_argument("--update",                     action  = "store_true",    help = "Allow the use of an existing output file.")
-    parser.add_argument("--gas",                 "-g",  action  = "store_true",    help = "Include gas particles.")
-    parser.add_argument("--darkmatter",          "-d",  action  = "store_true",    help = "Include dark matter particles.")
-    parser.add_argument("--stars",               "-s",  action  = "store_true",    help = "Include star particles.")
-    parser.add_argument("--blackholes",          "-b",  action  = "store_true",    help = "Include black hole particles.")
-    parser.add_argument("--verbose",             "-v",  action  = "store_true",    help = "Display extra information.")
+    parser.add_argument("simulation_directory",            type = str,                help = "Directory containing the EAGLE simulation data.")
+    parser.add_argument("snapshot_tag_source",             type = str,                help = "Tag of snapshot with the source particle distribution (e.g. \"012_z012p345\").")
+    parser.add_argument("snapshot_tag_target",             type = str,                help = "Tag of snapshot with the target particle distribution (e.g. \"012_z012p345\").")
+    parser.add_argument("--output-directory",       "-o",  type = str, default = ".", help = "Directory in which to create the output file. Default is the current working directory.")
+    #parser.add_argument("output_directory",                type = str, default = ".", help = "Alternate directory in which to create the output file.")
+    parser.add_argument("--source-is-snipshot",            action  = "store_true",    help = "Source is a snapshot.")
+    parser.add_argument("--target-is-snipshot",            action  = "store_true",    help = "target is a snapshot.")
+    parser.add_argument("--snipshots",                     action  = "store_true",    help = "Both source and target files are snipshots. This is the same as specifying both --source-is-snipshot and --target-is-snipshot.")
+    parser.add_argument("--overwrite",                     action  = "store_true",    help = "Overwrite existing output files.")
+    parser.add_argument("--update",                        action  = "store_true",    help = "Allow the use of an existing output file.")
+    parser.add_argument("--gas",                    "-g",  action  = "store_true",    help = "Include gas particles.")
+    parser.add_argument("--darkmatter",             "-d",  action  = "store_true",    help = "Include dark matter particles.")
+    parser.add_argument("--stars",                  "-s",  action  = "store_true",    help = "Include star particles.")
+    parser.add_argument("--blackholes",             "-b",  action  = "store_true",    help = "Include black hole particles.")
+    parser.add_argument("--dask-workers",                  type = int,                help = "Number of Dask workers to use. Set to 1 to disable parallel IO. Default is 1.", default = 1)
+    parser.add_argument("--dask-memory-per-worker",        type = int,                help = "Number of gigabytes available to each Dask worker. Default is 1GB.", default = 1)
+    parser.add_argument("--dask-dashboard-port",           type = int,                help = "Port for the Dask dashboard. Default is 8787.", default = 8787)
+    parser.add_argument("--verbose",                "-v",  action  = "store_true",    help = "Display extra information.")
+    parser.add_argument("--debug",                         action  = "store_true",    help = "Display extreme amounts of information.")
 
     # This will exit the program if -h or --help are specified
     args = parser.parse_args()
+
+    if args.verbose:
+        Settings.enable_verbose()
+    if args.debug:
+        Settings.enable_verbose()
+        Settings.enable_debug()
 
     Console.print_info("Arguments:", flush = True)
     for key in args.__dict__:
@@ -240,20 +246,20 @@ Calculates the indexing order to move from one set of particle IDs to another.
     #--------------------|
     # Start dask cluster |
     #--------------------|
-    if DASK_WORKERS > 0:
+    if args.dask_workers > 0:
         Console.print_info("Starting dask cluster.", flush = True)
 
         cluster = LocalCluster(
-            n_workers = DASK_WORKERS,
-            memory_limit = f"{DASK_MEMORY_LIMIT_PER_WORKER}GB",
-            dashboard_address = f":{DASK_PORT}" if DASK_PORT is not None else None
+            n_workers = args.dask_workers,
+            memory_limit = f"{args.dask_memory_per_worker}GB",
+            dashboard_address = f":{args.dask_dashboard_port}" if args.dask_dashboard_port is not None else None
         )
         client = cluster.get_client()
 
-        Console.print_info(f"Dask cluster running with {DASK_WORKERS} workers each allocated {DASK_MEMORY_LIMIT_PER_WORKER} GB of memory.")
+        Console.print_info(f"Dask cluster running with {args.dask_workers} workers each allocated {args.dask_memory_per_worker} GB of memory.")
 
-        if DASK_PORT is not None:
-            Console.print_info(f"Dask dashboard available at {socket.gethostname()}:{DASK_PORT}")
+        if args.dask_dashboard_port is not None:
+            Console.print_info(f"Dask dashboard available at {socket.gethostname()}:{args.dask_dashboard_port}")
         else:
             Console.print_verbose_info("No dask dashboard (dask_port was set to null).")
 
