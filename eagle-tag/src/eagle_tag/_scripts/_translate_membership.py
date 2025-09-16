@@ -18,19 +18,285 @@ import numpy as np
 import h5py as h5
 from QuasarCode import Console, Settings
 
-from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, Metadata, load_snapshot, load_catalogue_membership, make_aux_file, save_chunk
+from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, Metadata, load_snapshot, load_catalogue_membership, make_aux_file, save_chunk, save_data
 
 
 
 NULL_INDEX = 2**30 # Used where an integer index needs to be NULL
 
-DASK_WORKERS = 64
-DASK_MEMORY_LIMIT_PER_WORKER = 8 # GB
-DASK_PORT = 8787
-
 
 
 def main():
+    print(
+"""
+--|| EAGLE-tag (membership) ||--
+
+Creates snapshot-length files with the catalogue membership information for FOF groups and SUBFIND
+haloes. Compatible format with Rob Crain's files of the same type.
+""")
+
+    Console.show_times()
+    Console.reset_stopwatch()
+
+    #------------------------------|
+    # Parse command line arguments |
+    #------------------------------|
+    Console.print_info("Parsing command line arguments.")
+
+    parser = argparse.ArgumentParser(prog = "eagle-tag membership", description = "Run EAGLE halo membership tagging.")
+
+    parser.add_argument("simulation_directory",            type = str,                help = "Directory containing the EAGLE simulation data.")
+    parser.add_argument("snapshot_tag",                    type = str,                help = "Tag of snapshot with the source particle distribution (e.g. \"012_z012p345\").")
+    parser.add_argument("--output-directory",              type = str, default = ".", help = "Alternate directory in which to create the output file.")
+    parser.add_argument("--snipshot",                      action  = "store_true",    help = "Target a snipshot.")
+    parser.add_argument("--overwrite",                     action  = "store_true",    help = "Overwrite existing output files.")
+    parser.add_argument("--update",                        action  = "store_true",    help = "Allow the use of an existing output file.")
+    parser.add_argument("--gas",                    "-g",  action  = "store_true",    help = "Include gas particles.")
+    parser.add_argument("--darkmatter",             "-d",  action  = "store_true",    help = "Include dark matter particles.")
+    parser.add_argument("--stars",                  "-s",  action  = "store_true",    help = "Include star particles.")
+    parser.add_argument("--blackholes",             "-b",  action  = "store_true",    help = "Include black hole particles.")
+    parser.add_argument("--dask-workers",                  type = int,                help = "Number of Dask workers to use. Set to 1 to disable parallel IO. Default is 1.", default = 1)
+    parser.add_argument("--dask-memory-per-worker",        type = int,                help = "Number of gigabytes available to each Dask worker. Default is 1GB.", default = 1)
+    parser.add_argument("--dask-dashboard-port",           type = int,                help = "Port for the Dask dashboard. Default is 8787.", default = 8787)
+    parser.add_argument("--verbose",                "-v",  action  = "store_true",    help = "Display extra information.")
+    parser.add_argument("--debug",                         action  = "store_true",    help = "Display extreme amounts of information.")
+
+    # This will exit the program if -h or --help are specified
+    args = parser.parse_args()
+
+    if args.verbose:
+        Settings.enable_verbose()
+    if args.debug:
+        Settings.enable_verbose()
+        Settings.enable_debug()
+
+    Console.print_info("Arguments:", flush = True)
+    for key in args.__dict__:
+        Console.print_info(f"    {key}: {getattr(args, key)}", flush = True)
+
+    #----------------------------------|
+    # Check for a valid set of options |
+    #----------------------------------|
+
+    if not (args.gas or args.darkmatter or args.stars or args.blackholes):
+        raise ValueError("At least one of --gas, --dark_matter, --stars or --black_holes must be specified.")
+    
+    if args.update and args.overwrite:
+        raise ValueError("--update and --overwrite are mutually exclusive.")
+
+    #---------------------------------|
+    # Create directory and file paths |
+    #---------------------------------|
+    Console.print_info("Creating directory paths.")
+
+    files = EAGLE_Files(directory = args.simulation_directory)
+    target_tag = SnapshotTag.from_string(args.snapshot_tag)
+    snapshot_files = files.snapshot(tag = target_tag, snipshot = args.snipshot)
+
+    # We need to get these manually so that we can load metadata with h5py
+    snapshot_first_file_path = snapshot_files.snapshot_file_template.format(0)
+    catalogue_membership_first_file_path = snapshot_files.catalogue_membership_file_template.format(0)
+
+    #--------------------|
+    # Start dask cluster |
+    #--------------------|
+    if args.dask_workers > 0:
+        Console.print_info("Starting dask cluster.")
+
+        cluster = LocalCluster(
+            n_workers = args.dask_workers,
+            memory_limit = f"{args.dask_memory_per_worker}GB",
+            dashboard_address = f":{args.dask_dashboard_port}" if args.dask_dashboard_port is not None else None
+        )
+        client = cluster.get_client()
+
+        Console.print_info(f"Dask cluster running with {args.dask_workers} workers each allocated {args.dask_memory_per_worker} GB of memory.")
+
+        if args.dask_dashboard_port is not None:
+            Console.print_info(f"Dask dashboard available at {socket.gethostname()}:{args.dask_dashboard_port}")
+        else:
+            Console.print_verbose_info("No dask dashboard (dask_port was set to null).")
+
+    #----------------------------------------|
+    # Load snapshot and catalogue membership |
+    #----------------------------------------|
+    Console.print_info("Loading snapshot and catalogue membership.")
+
+    # xarray is used to load EAGLE data in a delayed fashion using dask.
+    # This will not actually 'load' the data - just the structure and some metadata.
+    # Data will be loaded from disk only when it is actually needed.
+
+    snapshot = load_snapshot(snapshot_files)
+    Console.print_verbose_info(snapshot)
+    catalogue_membership = load_catalogue_membership(snapshot_files)
+    Console.print_verbose_info(catalogue_membership)
+
+    n_total_gas   = int(snapshot["PartType0"]["ParticleIDs"].shape[0]) if snapshot["PartType0"] is not None else 0
+    n_total_dm    = int(snapshot["PartType1"]["ParticleIDs"].shape[0]) if snapshot["PartType1"] is not None else 0
+    n_total_stars = int(snapshot["PartType4"]["ParticleIDs"].shape[0]) if snapshot["PartType4"] is not None else 0
+    n_total_bh    = int(snapshot["PartType5"]["ParticleIDs"].shape[0]) if snapshot["PartType5"] is not None else 0
+    Console.print_info(f"Number of gas particles:         {n_total_gas}")
+    Console.print_info(f"Number of dark matter particles: {n_total_dm}")
+    Console.print_info(f"Number of star particles:        {n_total_stars}")
+    Console.print_info(f"Number of black hole particles:  {n_total_bh}")
+
+    #---------------|
+    # Load metadata |
+    #---------------|
+    Console.print_info("Loading metadata:")
+
+    metadata = Metadata()
+
+    Console.print_info("    Snapshot.")
+    with h5.File(snapshot_first_file_path, "r") as file:
+
+        metadata.constant_boltzmann    = np.float64(file["Constants"].attrs["BOLTZMANN"])
+        metadata.constant_gamma        = np.float64(file["Constants"].attrs["GAMMA"])
+        metadata.constant_protonmass   = np.float64(file["Constants"].attrs["PROTONMASS"])
+        metadata.constant_sec_per_year = np.float64(file["Constants"].attrs["SEC_PER_YEAR"])
+        metadata.constant_solar_mass   = np.float64(file["Constants"].attrs["SOLAR_MASS"])
+
+        metadata.header_expansion_factor       = np.float64(file["Header"].attrs["ExpansionFactor"])
+        metadata.header_hubble_param           = np.float64(file["Header"].attrs["HubbleParam"])
+        metadata.header_mass_table             = np.array(file["Header"].attrs["MassTable"], dtype = np.float64)
+        metadata.header_num_files_per_snapshot = np.int32(1) # Only one aux file
+        metadata.header_num_part_this_file     = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int64) # Only one aux file so all the particles are here
+        metadata.header_num_part_total         = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int64)
+
+    Console.print_info("    Catalogue.")
+    with h5.File(catalogue_membership_first_file_path, "r") as file:
+
+        metadata.header_num_part_sub = np.array(file["Header"].attrs["NumPart_Total"], dtype = np.int32)
+
+    #-----------------------|
+    # Create auxiliary file |
+    #-----------------------|
+    Console.print_info("Creating auxiliary file.")
+
+    output_filepath: str
+    try:
+        output_filepath = make_aux_file(
+            directory                       = args.output_directory,
+            tag                             = snapshot_files.tag,
+            metadata                        = metadata,
+            number_of_gas_particles         = n_total_gas   if args.gas         else None,
+            number_of_dark_matter_particles = n_total_dm    if args.darkmatter else None,
+            number_of_star_particles        = n_total_stars if args.stars       else None,
+            number_of_black_hole_particles  = n_total_bh    if args.blackholes else None,
+            allow_overwrite                 = args.overwrite,
+            is_snipshot                     = args.snipshot,
+            default_value                   = NULL_INDEX
+        )
+    except FileExistsError as e:
+        if args.update:
+            output_filepath = e.filename
+            Console.print_info(f"Found file at {output_filepath}. This will be updated with new data.")
+        else:
+            Console.print_info(f"Unable to create new auxiliary file at {e.filename}.\nA file already exists at this location.\nTo overwrite, specify --overwrite.\nTo update this file in-place, use --update.")
+            return
+        
+    #--------------------------|
+    # Loop over particle types |
+    #--------------------------|
+
+    for particle_type, particle_type_name in zip(["PartType0", "PartType1", "PartType4", "PartType5"], ["gas", "dark_matter", "star", "black_hole"]):
+
+        #---------------------------------|
+        # Skip particle types not present |
+        #---------------------------------|
+
+        if snapshot[particle_type] is None:
+            Console.print_info(f"No {particle_type_name} particles to tag.")
+            continue
+
+        #-----------------------------------|
+        # Skip particle types not requested |
+        #-----------------------------------|
+
+        if particle_type == "PartType0" and not args.gas:
+            continue
+        if particle_type == "PartType1" and not args.darkmatter:
+            continue
+        if particle_type == "PartType4" and not args.stars:
+            continue
+        if particle_type == "PartType5" and not args.blackholes:
+            continue
+
+        Console.print_info(f"Tagging {particle_type_name} particles:")
+
+        #--------------------|
+        # Write Particle IDs |
+        #--------------------|
+        Console.print_verbose_info(f"    Writing {particle_type}/ParticleIDs.")
+
+        save_data(
+            filepath      = output_filepath,
+            particle_type = particle_type,
+            field         = "ParticleIDs",
+            data          = snapshot[particle_type]["ParticleIDs"]
+        )
+
+        #---------------------------------------|
+        # Check that there is actually any data |
+        #---------------------------------------|
+
+        catalogue_exists = catalogue_membership[particle_type] is not None
+
+        if not catalogue_exists:
+            Console.print_info(f"    No {particle_type} data is present in this catalogue. Null data will be written for consistency.")
+
+            # Null values (2**30) are written into the non-particle ID fields by default
+
+        else:
+            Console.print_info(f"    Number of {particle_type_name} particles in FOF groups: {catalogue_membership[particle_type].sizes["catalogue_membership_particle_index"]}")
+
+            #-----------------------------------------|
+            # Sort the membership data by particle ID |
+            #-----------------------------------------|
+
+            Console.print_info("    Computing sort of catalogue membership data by particle ID.")
+            sorted_catalogue_particledata = catalogue_membership[particle_type].sortby(
+                "ParticleIDs"
+            ).rename_dims(
+                { "catalogue_membership_particle_index" : "catalogue_membership_sorted_particle_id_index" }
+            )
+
+            Console.print_info("    Identifying indexes of membership data.")
+            possible_locations = dask_array.searchsorted(sorted_catalogue_particledata["ParticleIDs"].data, snapshot[particle_type]["ParticleIDs"].data)
+
+            Console.print_info("    Constructing data output format.")
+            selected_data = xr.where(snapshot[particle_type]["ParticleIDs"].isin(sorted_catalogue_particledata["ParticleIDs"]), sorted_catalogue_particledata.isel(catalogue_membership_sorted_particle_id_index = possible_locations).rename_dims({ "catalogue_membership_sorted_particle_id_index" : "snapshot_particle_index" }), NULL_INDEX)
+            Console.print_debug(sorted_catalogue_particledata.isel(catalogue_membership_sorted_particle_id_index = possible_locations))
+            Console.print_debug(selected_data)
+
+            #-------------------|
+            # Write to the disk |
+            #-------------------|
+
+            Console.print_info(f"    Writing {particle_type}/GroupNumber.")
+            save_data(
+                filepath      = output_filepath,
+                particle_type = particle_type,
+                field         = "GroupNumber",
+                data          = selected_data["GroupNumber"]
+            )
+
+            Console.print_info(f"    Writing {particle_type}/SubGroupNumber.")
+            save_data(
+                filepath      = output_filepath,
+                particle_type = particle_type,
+                field         = "SubGroupNumber",
+                data          = selected_data["SubGroupNumber"]
+            )
+
+        Console.print_info(f"    {particle_type_name.title()} particles done.")
+
+    Console.print_info("DONE")
+    return
+
+
+
+def OLD__main():
     print(
 """
 --|| EAGLE-tag (membership) ||--
