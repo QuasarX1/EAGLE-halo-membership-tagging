@@ -960,8 +960,12 @@ Tags particles with the properties of the structure of which they were last a me
             Console.print_verbose_info("            FOF mask.")
             fof_update_mask: xr.DataArray
             if fof_groups_present:
-                groups_with_subgroups: xr.DataArray = xr.where(catalogue_data["FOF"]["Group_M_Crit200"].isel(catalogue_fof_index = membership["GroupNumber"] - 1) > 0.0, True, False)
-                fof_update_mask = xr.where(membership["GroupNumber"] != NULL_INDEX, groups_with_subgroups, False)
+                # Only select FOF information for particles where the GroupNumber is positive (-ve values indicate FOF non-membership but spherical overdensity membership)
+                positive_fof_group_numbers: xr.DataArray = xr.where(membership["GroupNumber"] > 0, membership["GroupNumber"], NULL_INDEX)
+                # Select the FOF group M_200 field and only include haloes where this is nonzero (it is possible to have at least one subhalo but have a 0 value in this field)
+                particles_in_groups_with_subgroups: xr.DataArray = xr.where(catalogue_data["FOF"]["Group_M_Crit200"].isel(catalogue_fof_index = positive_fof_group_numbers - 1) > 0.0, True, False)
+                # Select particles with positive FOF indexes and where the mapped M_200 is nonzero
+                fof_update_mask = xr.where(positive_fof_group_numbers != NULL_INDEX, particles_in_groups_with_subgroups, False)
             else:
                 fof_update_mask = xr.DataArray(
                     data = dask_array.full_like(membership["GroupNumber"].data, fill_value = False, dtype = np.bool_),
