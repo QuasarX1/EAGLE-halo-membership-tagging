@@ -125,7 +125,7 @@ def make_reorder_file(
             stars = file.create_group("PartType4")
 
             stars_forwards  = stars.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4]) if number_of_particles__target[4] > 0 else {}))
-            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[4]) if number_of_particles__target[4] > 0 else {}))
+            stars_backwards = stars.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[4],), dtype = np.int64, **(chunking_kwargs if number_of_particles__source[4] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__source[4]) if number_of_particles__source[4] > 0 else {}))
 
             stars_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             stars_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -140,7 +140,7 @@ def make_reorder_file(
             black_holes = file.create_group("PartType5")
 
             black_holes_forwards  = black_holes.create_dataset("ForwardsIndexes",  shape = (number_of_particles__target[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5]) if number_of_particles__target[5] > 0 else {}))
-            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__target[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__target[5]) if number_of_particles__target[5] > 0 else {}))
+            black_holes_backwards = black_holes.create_dataset("BackwardsIndexes", shape = (number_of_particles__source[5],), dtype = np.int64, **(chunking_kwargs if number_of_particles__source[5] >= 1024 * 8 else chunking_kwargs_alt(number_of_particles__source[5]) if number_of_particles__source[5] > 0 else {}))
 
             black_holes_forwards.attrs["CGSConversionFactor"] = np.float64(1.0)
             black_holes_forwards.attrs["aexp-scale-exponent"] = np.float64(0.0)
@@ -242,6 +242,7 @@ Calculates the indexing order to move from one set of particle IDs to another.
     tag__target = SnapshotTag.from_string(args.snapshot_tag_target)
     snapshot_files__source: EAGLE_Snapshot = files.snapshot(tag = tag__source, snipshot = args.snipshots or args.source_is_snipshot)
     snapshot_files__target: EAGLE_Snapshot = files.snapshot(tag = tag__target, snipshot = args.snipshots or args.target_is_snipshot)
+    Console.print_info(snapshot_files__target, args.snipshots or args.target_is_snipshot)
 
     #--------------------|
     # Start dask cluster |
