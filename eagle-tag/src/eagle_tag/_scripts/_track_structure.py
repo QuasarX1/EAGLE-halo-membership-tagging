@@ -78,6 +78,7 @@ max_size_to_write:               null # Value in Gigabytes
 #     SubhaloID           <- FirstSubhaloID + SubGroupNumber
 #     LastGroupRedshift
 #     LastSubhaloRedshift
+#     SubhaloMembershipCounter
 #     HaloMass            <- GroupMass
 #     HaloM200Crit        <- Group_M_Crit200
 
@@ -782,26 +783,28 @@ Tags particles with the properties of the structure of which they were last a me
 
         # Get number of columns and datatype of each field
         field_widths: dict[str, int] = {
-            "ParticleIDs"         : 1,
-            "GroupNumber"         : 1,
-            "FirstSubhaloID"      : 1,
-            "SubGroupNumber"      : 1,
-            "SubhaloID"           : 1,
-            "LastGroupRedshift"   : 1,
-            "LastSubhaloRedshift" : 1,
-            "HaloMass"            : 1,
-            "HaloM200Crit"        : 1,
+            "ParticleIDs"              : 1,
+            "GroupNumber"              : 1,
+            "FirstSubhaloID"           : 1,
+            "SubGroupNumber"           : 1,
+            "SubhaloID"                : 1,
+            "LastGroupRedshift"        : 1,
+            "LastSubhaloRedshift"      : 1,
+            "SubhaloMembershipCounter" : 1,
+            "HaloMass"                 : 1,
+            "HaloM200Crit"             : 1,
         }
         field_datatypes: dict[str, object] = {
-            "ParticleIDs"         : np.uint64,
-            "GroupNumber"         : np.uint32,
-            "FirstSubhaloID"      : np.uint32,
-            "SubGroupNumber"      : np.uint32,
-            "SubhaloID"           : np.uint32,
-            "LastGroupRedshift"   : np.float64,
-            "LastSubhaloRedshift" : np.float64,
-            "HaloMass"            : np.float32,
-            "HaloM200Crit"        : np.float32,
+            "ParticleIDs"              : np.uint64,
+            "GroupNumber"              : np.uint32,
+            "FirstSubhaloID"           : np.uint32,
+            "SubGroupNumber"           : np.uint32,
+            "SubhaloID"                : np.uint32,
+            "LastGroupRedshift"        : np.float64,
+            "LastSubhaloRedshift"      : np.float64,
+            "SubhaloMembershipCounter" : np.int16,
+            "HaloMass"                 : np.float32,
+            "HaloM200Crit"             : np.float32,
         }
         with h5.File(snapshot_files.catalogue_file_template.format(0), "r") as file:
             for output_name, (catalogue_field, _) in fof_group_fields_user.items():
@@ -901,7 +904,7 @@ Tags particles with the properties of the structure of which they were last a me
 
             #last_snapshot_output = load_output_file(
             #    previous_filepath,
-            #    "GroupNumber", "FirstSubhaloID", "SubGroupNumber", "SubhaloID", "LastGroupRedshift", "LastSubhaloRedshift",
+            #    "GroupNumber", "FirstSubhaloID", "SubGroupNumber", "SubhaloID", "LastGroupRedshift", "LastSubhaloRedshift", "SubhaloMembershipCounter",
             #    *fof_group_fields.keys(),
             #    *subgroup_fields_user_centrals.keys(),
             #    *subgroup_fields_user_all.keys()
@@ -998,7 +1001,8 @@ Tags particles with the properties of the structure of which they were last a me
             # Propagate existing data |
             #-------------------------|
             reorder_cache_filepath: str|None = None
-            if snapshot_index > 0 and previous_filepath is not None:
+            previous_data_available = snapshot_index > 0 and previous_filepath is not None
+            if previous_data_available:
 
                 #----------------------|
                 # Cache reorder result |
@@ -1190,6 +1194,7 @@ Tags particles with the properties of the structure of which they were last a me
                     reorder_and_cache_field("SubGroupNumber")
                     reorder_and_cache_field("SubhaloID")
                     reorder_and_cache_field("LastSubhaloRedshift")
+                    reorder_and_cache_field("SubhaloMembershipCounter")
                     for field in fof_group_fields:
                         reorder_and_cache_field(field)
                     for field in subgroup_fields_user_centrals:
@@ -1308,6 +1313,9 @@ Tags particles with the properties of the structure of which they were last a me
                 def insert_existing_data(field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray) -> xr.DataArray:
                     return xr.where(update_mask, updates, cached_data[field])
 
+                def increment_counter(field: str, update_mask: xr.DataArray) -> xr.DataArray:
+                    return xr.where(update_mask, cached_data[field] + 1, cached_data[field])
+
                 #reorder_indexes = reorder_data["ForwardsIndexes"][fof_update_mask_inverse]#TODO: this will fail later as there are other update masks and its getting masked twice!!!
 
 #                for field in (
@@ -1409,6 +1417,9 @@ Tags particles with the properties of the structure of which they were last a me
                         return xr.where(update_mask, updates, np.nan)#xr_dtypes.NA
                     else:
                         return updates.where(update_mask)
+
+                def increment_counter(field: str, update_mask: xr.DataArray) -> xr.DataArray:
+                    return xr.where(update_mask, 1, 0).astype(np.int16)
 
             #-------------------------|
             # Compute subhalo indexes |
@@ -1524,6 +1535,23 @@ Tags particles with the properties of the structure of which they were last a me
                 name = "LastSubhaloRedshift",
                 dims = "snapshot_particle_index",
                 data = insert_existing_data("LastSubhaloRedshift", snapshot_redshifts[snapshot_index], subhalo_update_mask),
+                attrs = {
+                }
+            )
+            Console.print_verbose_info(f"                Shape: {updated_data["LastSubhaloRedshift"].shape}")
+
+            if previous_data_available:
+                pass
+            else:
+                pass
+            Console.print_info("            SubhaloMembershipCounter")
+            updated_data["SubhaloMembershipCounter"] = xr.DataArray(
+                name = "SubhaloMembershipCounter",
+                dims = "snapshot_particle_index",
+                data = increment_counter(
+                    "SubhaloMembershipCounter",
+                    xr.where(cached_data["SubGroupNumber"] == NULL_INDEX, subhalo_update_mask, False) if previous_data_available else subhalo_update_mask
+                ),
                 attrs = {
                 }
             )
