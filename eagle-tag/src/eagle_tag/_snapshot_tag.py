@@ -2,9 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
-
-
+from dataclasses import dataclass, replace
 
 @dataclass
 class SnapshotTag:
@@ -35,7 +33,13 @@ class SnapshotTag:
     @property
     def redshift(self) -> float:
         return float(self.redshift_tag[1:].replace("p", "."))
-    
+
+    def __copy__(self) -> "SnapshotTag":
+        return replace(self)
+
+    def copy(self) -> "SnapshotTag":
+        return self.__copy__()
+
     @staticmethod
     def from_string(tag: str) -> "SnapshotTag":
         """
