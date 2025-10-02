@@ -566,7 +566,7 @@ Tags particles with the properties of the structure of which they were last a me
     if not os.path.exists(args.settings):
         Console.print_error(f"Unable to locate settings file at \"{args.settings}\". Create a new one using --new-settings-file", flush = True)
         sys.exit(1)
-    
+
     if args.update and args.overwrite:
         Console.print_error("--update and --overwrite are mutually exclusive.", flush = True)
         sys.exit(1)
