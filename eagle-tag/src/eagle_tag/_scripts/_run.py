@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import argparse
 import sys
 
 from QuasarCode import Console
@@ -10,6 +9,7 @@ from QuasarCode import Console
 from ._translate_membership import main as run_translate_membership
 from ._calculate_reorder import main as run_calculate_reorder
 from ._track_structure import main as run_track_structure
+from ._trace import main as particle_trace
 
 
 
@@ -17,6 +17,7 @@ commandlets = {
     "membership": run_translate_membership,
     "reorder"   : run_calculate_reorder,
     "track"     : run_track_structure,
+    "trace"     : particle_trace,
 }
 
 
@@ -46,6 +47,9 @@ Commandlets:
 
     track       ->  Tags particles with the properties of the structure of which they were last a
                         member.
+
+    trace       ->  Traces the properties of specific particles and their structure properties
+                        across snapshots.
 """,
             flush = True
         )
