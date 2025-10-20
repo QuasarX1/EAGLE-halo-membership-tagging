@@ -33,8 +33,6 @@ def load_snapshot(
         with h5.File(filepath_template.format(i), "r") as file:
             data_in_files[i][:] = file["Header"].attrs["NumPart_ThisFile"] > 0
     any_data_present = np.any(data_in_files, axis = 0)
-    Console.print_debug(data_in_files)
-    Console.print_debug(any_data_present)
 
     if gas_fields is None:
         gas_fields = ["ParticleIDs"]
