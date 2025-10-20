@@ -4,6 +4,7 @@
 
 import argparse
 import errno
+from functools import singledispatch
 import os
 import socket
 import sys
@@ -21,6 +22,7 @@ from dask.utils import SerializableLock
 import numpy as np
 import h5py as h5
 from QuasarCode import Console, Settings, Stopwatch
+from QuasarCode.Data import Rect
 from QuasarCode.IO.Configurations import ConfigsBase, YamlConfig
 
 from eagle_tag import EAGLE_Files, EAGLE_Snapshot, SnapshotTag, TagSequence, load_snapshot, load_catalogue, load_hdf5_files_with_xarray, make_aux_file_path as make_complete_membership_file_path, load_catalogue_membership
@@ -178,33 +180,78 @@ Output data is stored in a zarr store in the following format:
 
     # Its reasonable to wish to track a gas particle after it turned into a star
     if allow_gas_to_star:
+        Console.print_error("Tracing gas to star particle transitions is not yet implemented.")
+        sys.exit(1)
         pass#TODO: find where the particle disappears from one dataset and appears in the other (SnapshotParticleIndex != NULL_INDEX)
     #TODO: consolidate to create data object - does xr.where work over a whole Dataset???
 
     #data = data.isel(Redshifts = slice(0,160))
 
-    x_label: str
-    x_data: xr.DataArray
-    if not args.expansion:
-        x_label = "z"
-        x_data  = data["Redshifts"]
-        #x_data  = np.arange(len(data["Redshifts"]))
-    else:
-        x_label = "a"
-        x_data  = 1 / (data["Redshifts"] + 1)
-
-    y_label = args.field
     y_data  = data[args.field]
 
     if args.default is not None:
         y_data = y_data.fillna(args.default)
 
-    plt.plot(x_data, y_data)
-    plt.ylabel(y_label)
-    plt.xlabel(x_label)
-    plt.xlim(x_data[0], x_data[-1])
+    plot_trace_data(
+        trace_data           = y_data,
+        redshifts            = data["Redshifts"],
+        use_expansion_factor = args.expansion,
+    )
 
     if args.file is not None:
         plt.savefig(args.file)
     else:
         plt.show()
+
+
+
+def plot_trace_data(
+    trace_data:           xr.DataArray,
+    redshifts:            xr.DataArray,
+    use_expansion_factor: bool          = False,
+    log_time:             bool          = False,
+    log_field:            bool          = False,
+    field_units:          str           = "",
+    axis_limits:          Rect|None     = None,
+    axis:                 plt.Axes|None = None
+) -> None:
+    x = 1 / (redshifts + 1) if use_expansion_factor else redshifts
+    if log_time:
+        if use_expansion_factor:
+            x = np.log10(x)
+        else:
+            x = np.log10(x + 1)
+    if axis is None:
+        plt.figure(figsize = (8, 3))
+        axis = plt.gca()
+    axis.plot(x, trace_data if not log_field else np.log10(trace_data))
+    if use_expansion_factor:
+        axis.set_xlim((0, 1))
+    else:
+        axis.set_xlim((redshifts[0], 0))
+    if axis_limits is not None:
+        axis.set_xlim((axis_limits.x, axis_limits.x1))
+        axis.set_ylim((axis_limits.y, axis_limits.y1))
+    axis.set_xlabel(("$\\rm log_{10}$ " if log_time else "") + ("a" if use_expansion_factor else ("1 + z" if log_time else "z")))
+    axis.set_ylabel(("$\\rm log_{10}$ " if log_field else "") + trace_data.name + (f" [{field_units}]" if field_units else ""))
+
+def plot_trace_field(
+    trace_data:           xr.Dataset,
+    field:                str,
+    use_expansion_factor: bool          = False,
+    log_time:             bool          = False,
+    log_field:            bool          = False,
+    field_units:          str           = "",
+    axis_limits:          Rect|None     = None,
+    axis:                 plt.Axes|None = None
+) -> None:
+    plot_trace_data(
+        trace_data           = trace_data[field],
+        redshifts            = trace_data["Redshifts"],
+        use_expansion_factor = use_expansion_factor,
+        log_time             = log_time,
+        log_field            = log_field,
+        field_units          = field_units,
+        axis_limits          = axis_limits,
+        axis                 = axis
+    )
