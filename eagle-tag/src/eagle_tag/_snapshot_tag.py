@@ -20,8 +20,12 @@ class SnapshotTag:
     number: str = "028"
     redshift_tag: str = "z000p000"
 
-    def __repr__(self) -> str:
+    @property
+    def info(self) -> str:
         return f"{self.number} (z = {self.redshift_tag})"
+
+    def __repr__(self) -> str:
+        return self.info
 
     def __str__(self) -> str:
         return f"{self.number}_{self.redshift_tag}"
