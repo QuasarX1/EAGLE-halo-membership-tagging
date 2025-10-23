@@ -71,34 +71,62 @@ max_size_to_write:               null # Value in Gigabytes
 # Tracked Quantities
 
 # The following fields are automatically added:
-#     ParticleIDs         <- From membership file
-#     GroupNumber         <- From membership file
+#     ParticleIDs                        <- From membership file
+#     GroupNumber                        <- From membership file
 #     FirstSubhaloID
-#     SubGroupNumber      <- From membership file
-#     SubhaloID           <- FirstSubhaloID + SubGroupNumber
+#     SubGroupNumber                     <- From membership file
+#     SubhaloID                          <- FirstSubhaloID + SubGroupNumber
 #     LastGroupRedshift
 #     LastSubhaloRedshift
 #     SubhaloMembershipCounter
-#     HaloMass            <- GroupMass
-#     HaloM200Crit        <- Group_M_Crit200
+#     HaloMass                           <- GroupMass
+#     HaloMass__maximum
+#     HaloMass__redshift_of_maximum
+#     HaloM200Crit                       <- Group_M_Crit200
+#     HaloM200Crit__maximum
+#     HaloM200Crit__redshift_of_maximum
 
 group: # Values from the FOF table
-    HaloM500Crit:      "Group_M_Crit500"
-    NumberOfSubhaloes: "NumOfSubhalos"
+    HaloM500Crit:
+        field:          "Group_M_Crit500"
+        record_maximum: false
+    NumberOfSubhaloes:
+        field:          "NumOfSubhalos"
+        record_maximum: false
 
 central: # Values from the Subhalo table for the first subhalo of the group
-    CentralMass_Total:                  "Mass"
-    CentralMass_ByType:                 "MassType"
-    CentralMassAtHalfMassRadius_ByType: "MassTwiceHalfMassRad"
-    CentralHalfMassRadius_ByType:       "HalfMassRad"
-    CentralMassAt30kpc_ByType:          "ApertureMeasurements/Mass/030kpc"
+    CentralMass_Total:
+        field:          "Mass"
+        record_maximum: false
+    CentralMass_ByType:
+        field:          "MassType"
+        record_maximum: false
+    CentralMassAtHalfMassRadius_ByType:
+        field:          "MassTwiceHalfMassRad"
+        record_maximum: false
+    CentralHalfMassRadius_ByType:
+        field:          "HalfMassRad"
+        record_maximum: false
+    CentralMassAt30kpc_ByType:
+        field:          "ApertureMeasurements/Mass/030kpc"
+        record_maximum: false
 
 subhalo: # Values from the Subhalo table
-    SubhaloMass_Total:                  "Mass"
-    SubhaloMass_ByType:                 "MassType"
-    SubhaloMassAtHalfMassRadius_ByType: "MassTwiceHalfMassRad"
-    SubhaloHalfMassRadius_ByType:       "HalfMassRad"
-    SubhaloMassAt30kpc_ByType:          "ApertureMeasurements/Mass/030kpc"
+    SubhaloMass_Total:
+        field:          "Mass"
+        record_maximum: false
+    SubhaloMass_ByType:
+        field:          "MassType"
+        record_maximum: false
+    SubhaloMassAtHalfMassRadius_ByType:
+        field:          "MassTwiceHalfMassRad"
+        record_maximum: false
+    SubhaloHalfMassRadius_ByType:
+        field:          "HalfMassRad"
+        record_maximum: false
+    SubhaloMassAt30kpc_ByType:
+        field:          "ApertureMeasurements/Mass/030kpc"
+        record_maximum: false
 """
     with open(filepath, "w") as file:
         file.write(content)
@@ -487,12 +515,6 @@ def write_to_output_field(filepath: str, particle_type: str, field: str, data: n
 
 
 
-def write_zarr_output_file(filepath: str, group: str|None, data: xr.Dataset) -> None:
-    data.to_zarr(filepath, mode = "w", group = group)
-def read_zarr_output_file(filepath: str, group: str|None = None) -> None:
-    xr.open_zarr(filepath, engine = "zarr", group = group)
-
-
 def main() -> None:
     print(
 """
@@ -632,7 +654,7 @@ Tags particles with the properties of the structure of which they were last a me
     #---------------------------------|
     Console.print_verbose_info("Processing requested fields.")
 
-    def parse_target_field(field_expression: str) -> tuple[str, tuple[int, ...]|None]:
+    def parse_target_field(field_expression: str) -> tuple[str, tuple[int, ...]|None, bool]:
         has_open_bracket = "[" in field_expression
         has_close_bracket = "]" in field_expression
         is_valid = (has_open_bracket and has_open_bracket) or (not has_open_bracket and not has_open_bracket)
@@ -648,16 +670,16 @@ Tags particles with the properties of the structure of which they were last a me
         else:
             return (field_expression, None)
 
-    fof_group_fields_default: dict[str, tuple[str, tuple[int, ...]|None]] = {
-        "HaloMass"     : ("GroupMass",       None),
-        "HaloM200Crit" : ("Group_M_Crit200", None),
+    fof_group_fields_default: dict[str, tuple[str, tuple[int, ...]|None, bool]] = {
+        "HaloMass"     : ("GroupMass",       None, True),
+        "HaloM200Crit" : ("Group_M_Crit200", None, True),
     }
-    fof_group_fields_user: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.group[field]) for field in settings.group.keys if field not in fof_group_fields_default } if settings.group is not None else {}
-    fof_group_fields: dict[str, tuple[str, tuple[int, ...]|None]] = fof_group_fields_default | fof_group_fields_user
+    fof_group_fields_user: dict[str, tuple[str, tuple[int, ...]|None, bool]] = { field : tuple([*parse_target_field(settings.group[field]["field"]), settings.group[field]["record_maximum"]]) for field in settings.group.keys if field not in fof_group_fields_default } if settings.group is not None else {}
+    fof_group_fields:      dict[str, tuple[str, tuple[int, ...]|None, bool]] = fof_group_fields_default | fof_group_fields_user
     fof_group_field_names_for_reading: tuple[str, ...] = tuple(list(set([v[0] for v in fof_group_fields.values()]) | {"NumOfSubhalos"}) + ["FirstSubhaloID"]) # FirstSubhaloID is needed to calculate the true index for subhaloes
 
-    subgroup_fields_user_all: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.subhalo[field]) for field in settings.subhalo.keys } if settings.subhalo is not None else {}
-    subgroup_fields_user_centrals: dict[str, tuple[str, tuple[int, ...]|None]] = { field : parse_target_field(settings.central[field]) for field in settings.central.keys } if settings.central is not None else {}
+    subgroup_fields_user_all:      dict[str, tuple[str, tuple[int, ...]|None, bool]] = { field : tuple([*parse_target_field(settings.subhalo[field]["field"]), settings.subhalo[field]["record_maximum"]]) for field in settings.subhalo.keys } if settings.subhalo is not None else {}
+    subgroup_fields_user_centrals: dict[str, tuple[str, tuple[int, ...]|None, bool]] = { field : tuple([*parse_target_field(settings.central[field]["field"]), settings.central[field]["record_maximum"]]) for field in settings.central.keys } if settings.central is not None else {}
     subgroup_field_names_for_reading: tuple[str, ...] = tuple(set([v[0] for v in subgroup_fields_user_all.values()]) | set([v[0] for v in subgroup_fields_user_centrals.values()]))
     subgroups_with_nested_fields: tuple[bool, ...] = tuple(["/" in field_path.strip("/") for field_path in subgroup_field_names_for_reading])
     subgroup_fields_include_nested: bool = any(subgroups_with_nested_fields)
@@ -783,37 +805,52 @@ Tags particles with the properties of the structure of which they were last a me
 
         # Get number of columns and datatype of each field
         field_widths: dict[str, int] = {
-            "ParticleIDs"              : 1,
-            "GroupNumber"              : 1,
-            "FirstSubhaloID"           : 1,
-            "SubGroupNumber"           : 1,
-            "SubhaloID"                : 1,
-            "LastGroupRedshift"        : 1,
-            "LastSubhaloRedshift"      : 1,
-            "SubhaloMembershipCounter" : 1,
-            "HaloMass"                 : 1,
-            "HaloM200Crit"             : 1,
+            "ParticleIDs"                       : 1,
+            "GroupNumber"                       : 1,
+            "FirstSubhaloID"                    : 1,
+            "SubGroupNumber"                    : 1,
+            "SubhaloID"                         : 1,
+            "LastGroupRedshift"                 : 1,
+            "LastSubhaloRedshift"               : 1,
+            "SubhaloMembershipCounter"          : 1,
+            "HaloMass"                          : 1,
+            "HaloMass__maximum"                 : 1,
+            "HaloMass__redshift_of_maximum"     : 1,
+            "HaloM200Crit"                      : 1,
+            "HaloM200Crit__maximum"             : 1,
+            "HaloM200Crit__redshift_of_maximum" : 1,
         }
         field_datatypes: dict[str, object] = {
-            "ParticleIDs"              : np.uint64,
-            "GroupNumber"              : np.uint32,
-            "FirstSubhaloID"           : np.uint32,
-            "SubGroupNumber"           : np.uint32,
-            "SubhaloID"                : np.uint32,
-            "LastGroupRedshift"        : np.float64,
-            "LastSubhaloRedshift"      : np.float64,
-            "SubhaloMembershipCounter" : np.int16,
-            "HaloMass"                 : np.float32,
-            "HaloM200Crit"             : np.float32,
+            "ParticleIDs"                       : np.uint64,
+            "GroupNumber"                       : np.uint32,
+            "FirstSubhaloID"                    : np.uint32,
+            "SubGroupNumber"                    : np.uint32,
+            "SubhaloID"                         : np.uint32,
+            "LastGroupRedshift"                 : np.float64,
+            "LastSubhaloRedshift"               : np.float64,
+            "SubhaloMembershipCounter"          : np.int16,
+            "HaloMass"                          : np.float32,
+            "HaloMass__maximum"                 : np.float32,
+            "HaloMass__redshift_of_maximum"     : np.float32,
+            "HaloM200Crit"                      : np.float32,
+            "HaloM200Crit__maximum"             : np.float32,
+            "HaloM200Crit__redshift_of_maximum" : np.float64,
         }
         with h5.File(snapshot_files.catalogue_file_template.format(0), "r") as file:
-            for output_name, (catalogue_field, _) in fof_group_fields_user.items():
-                field_widths[output_name]    = file["FOF"][catalogue_field].shape[-1] if len(file["FOF"][catalogue_field].shape) > 1 else 1
-                field_datatypes[output_name] = file["FOF"][catalogue_field].dtype.type
-            for output_name, (catalogue_field, _) in subgroup_fields_user_all.items():
+            for output_name, (catalogue_field, _, record_max) in fof_group_fields_user.items():
+                field_width = file["FOF"][catalogue_field].shape[-1] if len(file["FOF"][catalogue_field].shape) > 1 else 1
+                field_datatype = file["FOF"][catalogue_field].dtype.type
+                field_widths[output_name]    = field_width
+                field_datatypes[output_name] = field_datatype
+                if record_max:
+                    field_widths[f"{field}__maximum"]    = field_width
+                    field_datatypes[f"{field}__maximum"] = field_datatype
+                    field_widths[f"{field}__redshift_of_maximum"]    = 1
+                    field_datatypes[f"{field}__redshift_of_maximum"] = np.float64
+            for output_name, (catalogue_field, _, record_max) in subgroup_fields_user_all.items():
                 field_widths[output_name]    = file["Subhalo"][catalogue_field].shape[-1] if len(file["Subhalo"][catalogue_field].shape) > 1 else 1
                 field_datatypes[output_name] = file["Subhalo"][catalogue_field].dtype.type
-            for output_name, (catalogue_field, _) in subgroup_fields_user_centrals.items():
+            for output_name, (catalogue_field, _, record_max) in subgroup_fields_user_centrals.items():
                 field_widths[output_name]    = file["Subhalo"][catalogue_field].shape[-1] if len(file["Subhalo"][catalogue_field].shape) > 1 else 1
                 field_datatypes[output_name] = file["Subhalo"][catalogue_field].dtype.type
 
@@ -901,21 +938,6 @@ Tags particles with the properties of the structure of which they were last a me
         #-----------------------|
         if snapshot_index > 0 and previous_filepath is not None:
             Console.print_info("    Loading previous results.")
-
-            #last_snapshot_output = load_output_file(
-            #    previous_filepath,
-            #    "GroupNumber", "FirstSubhaloID", "SubGroupNumber", "SubhaloID", "LastGroupRedshift", "LastSubhaloRedshift", "SubhaloMembershipCounter",
-            #    *fof_group_fields.keys(),
-            #    *subgroup_fields_user_centrals.keys(),
-            #    *subgroup_fields_user_all.keys()
-            #)
-
-            #last_snapshot_output = {
-            #    "PartType0" : xr.open_dataset(previous_filepath, engine = "h5netcdf", group = "PartType0", chunks = "auto") if settings.do_gas         else None,
-            #    "PartType1" : xr.open_dataset(previous_filepath, engine = "h5netcdf", group = "PartType1", chunks = "auto") if settings.do_dark_matter else None,
-            #    "PartType4" : xr.open_dataset(previous_filepath, engine = "h5netcdf", group = "PartType4", chunks = "auto") if settings.do_stars       else None,
-            #    "PartType5" : xr.open_dataset(previous_filepath, engine = "h5netcdf", group = "PartType5", chunks = "auto") if settings.do_black_holes else None
-            #}
 
             Console.print_debug(f"        File: \"{previous_filepath}.zarr\"")
             last_snapshot_output = {
@@ -1197,112 +1219,19 @@ Tags particles with the properties of the structure of which they were last a me
                     reorder_and_cache_field("SubhaloMembershipCounter")
                     for field in fof_group_fields:
                         reorder_and_cache_field(field)
+                        if fof_group_fields[field][2]: # record_max
+                            reorder_and_cache_field(f"{field}__maximum")
+                            reorder_and_cache_field(f"{field}__redshift_of_maximum")
                     for field in subgroup_fields_user_centrals:
                         reorder_and_cache_field(field)
+                        if subgroup_fields_user_centrals[field][2]: # record_max
+                            reorder_and_cache_field(f"{field}__maximum")
+                            reorder_and_cache_field(f"{field}__redshift_of_maximum")
                     for field in subgroup_fields_user_all:
                         reorder_and_cache_field(field)
-
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            GroupNumber")
-#                    cached_data["GroupNumber"] = xr.DataArray(
-#                        name = "GroupNumber",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("GroupNumber").isel(snapshot_particle_index = load_large_particle_array(reorder_data["ForwardsIndexes"])),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["GroupNumber"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            LastGroupRedshift")
-#                    cached_data["LastGroupRedshift"] = xr.DataArray(
-#                        name = "LastGroupRedshift",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("LastGroupRedshift").isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["LastGroupRedshift"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            FirstSubhaloID")
-#                    cached_data["FirstSubhaloID"] = xr.DataArray(
-#                        name = "FirstSubhaloID",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("FirstSubhaloID").isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["FirstSubhaloID"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            SubGroupNumber")
-#                    cached_data["SubGroupNumber"] = xr.DataArray(
-#                        name = "SubGroupNumber",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("SubGroupNumber").isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["SubGroupNumber"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            SubhaloID")
-#                    cached_data["SubhaloID"] = xr.DataArray(
-#                        name = "SubhaloID",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("SubhaloID").isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["SubhaloID"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    cached_data = xr.Dataset()
-#                    Console.print_info("            LastSubhaloRedshift")
-#                    cached_data["LastSubhaloRedshift"] = xr.DataArray(
-#                        name = "LastSubhaloRedshift",
-#                        dims = "snapshot_particle_index",
-#                        data = load_previous_data("LastSubhaloRedshift").isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                        attrs = {}
-#                    )
-#                    Console.print_verbose_info(f"                Shape: {cached_data["LastSubhaloRedshift"].shape}")
-#                    cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    for field, catalogue_field in fof_group_fields.items():
-#                        cached_data = xr.Dataset()
-#                        Console.print_info(f"            {field} ({catalogue_field})")
-#                        cached_data[field] = xr.DataArray(
-#                            name = field,
-#                            dims = "snapshot_particle_index" if len(catalogue_data["FOF"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-#                            data = load_previous_data(field).isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                            attrs = {}
-#                        )
-#                        Console.print_verbose_info(f"                Shape: {cached_data[field].shape}")
-#                        cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    for field, catalogue_field in subgroup_fields_user_centrals.items():
-#                        cached_data = xr.Dataset()
-#                        Console.print_info(f"            {field} ({catalogue_field})")
-#                        cached_data[field] = xr.DataArray(
-#                            name = field,
-#                            dims = "snapshot_particle_index" if len(catalogue_data["Subhalo"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-#                            data = load_previous_data(field).isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                            attrs = {}
-#                        )
-#                        Console.print_verbose_info(f"                Shape: {cached_data[field].shape}")
-#                        cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
-#
-#                    for field, catalogue_field in subgroup_fields_user_all.items():
-#                        cached_data = xr.Dataset()
-#                        Console.print_info(f"            {field} ({catalogue_field})")
-#                        cached_data[field] = xr.DataArray(
-#                            name = field,
-#                            dims = "snapshot_particle_index" if len(catalogue_data["Subhalo"][catalogue_field].shape) == 1 else ("snapshot_particle_index", "particle_type_number"),
-#                            data = load_previous_data(field).isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]),
-#                            attrs = {}
-#                        )
-#                        Console.print_verbose_info(f"                Shape: {cached_data[field].shape}")
-#                        cached_data.to_zarr(reorder_cache_filepath, mode = "a", group = particle_type)
+                        if subgroup_fields_user_all[field][2]: # record_max
+                            reorder_and_cache_field(f"{field}__maximum")
+                            reorder_and_cache_field(f"{field}__redshift_of_maximum")
 
                 #--------------------------------|
                 # Load reordered data from cache |
@@ -1316,90 +1245,17 @@ Tags particles with the properties of the structure of which they were last a me
                 def increment_counter(field: str, update_mask: xr.DataArray) -> xr.DataArray:
                     return xr.where(update_mask, cached_data[field] + 1, cached_data[field])
 
-                #reorder_indexes = reorder_data["ForwardsIndexes"][fof_update_mask_inverse]#TODO: this will fail later as there are other update masks and its getting masked twice!!!
-
-#                for field in (
-#                    "GroupNumber",
-#                    "LastGroupRedshift",
-#                    "FirstSubhaloID",
-#                    "SubGroupNumber",
-#                    "SubhaloID",
-#                    "LastSubhaloRedshift",
-#                    *list(fof_group_fields.keys()) + list(subgroup_fields_user_centrals.keys()),
-#                    *list(subgroup_fields_user_all.keys())
-#                ):
-#                    data = last_snapshot_output[particle_type][field].isel(file_order = reorder_data["ForwardsIndexes"])
-#                    data.to_netcdf(
-#                        os.path.join(args.output_directory, "tmp", f"reordered-data-{tag.tag}-{particle_type}.hdf5"),
-#                        mode = "a",
-#                        engine = "h5netcdf"
-#                    )
-#
-#                reordered_existing_data: xr.Dataset = xr.open_dataset(os.path.join(args.output_directory, "tmp", f"reordered-data-{tag.tag}-{particle_type}.hdf5"), engine = "h5netcdf", dims=("file_order",))
-#
-#                def insert_existing_data(field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray, integer: bool) -> xr.DataArray:
-#                    if integer:
-#                        Console.print_debug(update_mask)
-#                        Console.print_debug(updates)
-#                        Console.print_debug(reordered_existing_data[field])
-#                        return xr.where(update_mask, updates, reordered_existing_data[field])
-#                    elif isinstance(updates, (int, float)):
-#                        return xr.where(update_mask, updates, reordered_existing_data[field])
-#                    else:
-#                        return updates.where(update_mask, other = reordered_existing_data[field])
-#
-#                def insert_existing_data(field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray, integer: bool) -> xr.DataArray:
-#                    if integer:
-#                        return xr.where(update_mask, updates, last_snapshot_output[particle_type][field].isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]))
-#                    elif isinstance(updates, (int, float)):
-#                        return xr.where(update_mask, updates, last_snapshot_output[particle_type][field].isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]))
-#                    else:
-#                        return updates.where(update_mask, other = last_snapshot_output[particle_type][field].isel(snapshot_particle_index = reorder_data["ForwardsIndexes"]))
-
-#                #-------------------------|
-#                # Propagate existing data |
-#                #-------------------------|
-#                Console.print_info("        Propagating existing data.")
-#
-#                for field in ("GroupNumber", "LastGroupRedshift"):
-#                    # These fields are not read from catalogue data or are computed in some way
-#
-#                    #-----------------------|
-#                    # Reorder existing data |
-#                    #-----------------------|
-#                    Console.print_verbose_info(f"            {field}")
-#
-#                    write_to_output_field(current_output_filepath, particle_type, field, last_snapshot_output[particle_type][field][reorder_indexes[fof_update_mask_inverse]].compute(), mask = fof_update_mask_inverse)
-#
-#                for field in ("FirstSubhaloID", "SubGroupNumber", "SubhaloID", "LastSubhaloRedshift"):
-#                    # These fields are not read from catalogue data or are computed in some way
-#
-#                    #-----------------------|
-#                    # Reorder existing data |
-#                    #-----------------------|
-#                    Console.print_verbose_info(f"            {field}")
-#
-#                    write_to_output_field(current_output_filepath, particle_type, field, last_snapshot_output[particle_type][field][reorder_indexes[subhalo_update_mask_inverse]].compute(), mask = subhalo_update_mask_inverse)
-#
-#                for field in list(fof_group_fields.keys()) + list(subgroup_fields_user_centrals.keys()):
-#                    # These are raw data fields
-#
-#                    #-----------------------|
-#                    # Reorder existing data |
-#                    #-----------------------|
-#                    Console.print_verbose_info(f"            {field}")
-#
-#                    write_to_output_field(current_output_filepath, particle_type, field, last_snapshot_output[particle_type][field][reorder_indexes[fof_update_mask_inverse]].compute(), mask = fof_update_mask_inverse)
-#
-#                for field in list(subgroup_fields_user_all.keys()):
-#                    # These are raw data fields
-#
-#                    #-----------------------|
-#                    # Reorder existing data |
-#                    #-----------------------|
-#                    Console.print_verbose_info(f"            {field}")
-#
-#                    write_to_output_field(current_output_filepath, particle_type, field, last_snapshot_output[particle_type][field][reorder_indexes[subhalo_update_mask_inverse]].compute(), mask = subhalo_update_mask_inverse)
+                def keep_maximum_data(field: str, redshift_field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray, redshift: float) -> tuple[xr.DataArray, xr.DataArray]:
+                    increased_value_update_mask = (updates >= cached_data[field]) & update_mask
+                    return xr.where(
+                        increased_value_update_mask,
+                        updates,
+                        cached_data[field]
+                    ), xr.where(
+                        increased_value_update_mask,
+                        redshift,
+                        cached_data[redshift_field]
+                    )
 
             else:
                 Console.print_debug(f"        snapshot_index={snapshot_index}, previous_filepath={previous_filepath}.")
@@ -1420,6 +1276,9 @@ Tags particles with the properties of the structure of which they were last a me
 
                 def increment_counter(field: str, update_mask: xr.DataArray) -> xr.DataArray:
                     return xr.where(update_mask, 1, 0).astype(np.int16)
+
+                def keep_maximum_data(field: str, redshift_field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray, redshift: float) -> tuple[xr.DataArray, xr.DataArray]:
+                    return insert_existing_data(field, updates, update_mask), insert_existing_data(redshift_field, redshift, update_mask)
 
             #-------------------------|
             # Compute subhalo indexes |
@@ -1550,14 +1409,14 @@ Tags particles with the properties of the structure of which they were last a me
                 dims = "snapshot_particle_index",
                 data = increment_counter(
                     "SubhaloMembershipCounter",
-                    xr.where(cached_data["SubGroupNumber"] == NULL_INDEX, subhalo_update_mask, False) if previous_data_available else subhalo_update_mask
+                    xr.where(cached_data["SubGroupNumber"] == NULL_INDEX, subhalo_update_mask, False) if previous_data_available else subhalo_update_mask#TODO: this field dosen't seem to be correct
                 ),
                 attrs = {
                 }
             )
             Console.print_verbose_info(f"                Shape: {updated_data["LastSubhaloRedshift"].shape}")
 
-            for field, (catalogue_field, column_indexes) in fof_group_fields.items():
+            for field, (catalogue_field, column_indexes, store_maximum) in fof_group_fields.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
@@ -1567,8 +1426,28 @@ Tags particles with the properties of the structure of which they were last a me
                     }
                 )
                 Console.print_verbose_info(f"                Shape: {updated_data[field].shape}")
+                if store_maximum:
+                    max_field_name = f"{field}__maximum"
+                    max_field_redshift_name = f"{field}__redshift_of_maximum"
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_fof_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask, snapshot_redshifts[snapshot_index])
+                    updated_data[max_field_name] = xr.DataArray(
+                        name = max_field_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["FOF"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_name].shape}")
+                    updated_data[max_field_redshift_name] = xr.DataArray(
+                        name = max_field_redshift_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["FOF"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field_redshift,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_redshift_name].shape}")
 
-            for field, (catalogue_field, column_indexes) in subgroup_fields_user_centrals.items():
+            for field, (catalogue_field, column_indexes, store_maximum) in subgroup_fields_user_centrals.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
@@ -1578,8 +1457,28 @@ Tags particles with the properties of the structure of which they were last a me
                     }
                 )
                 Console.print_verbose_info(f"                Shape: {updated_data[field].shape}")
+                if store_maximum:
+                    max_field_name = f"{field}__maximum"
+                    max_field_redshift_name = f"{field}__redshift_of_maximum"
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_central_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask, snapshot_redshifts[snapshot_index])
+                    updated_data[max_field_name] = xr.DataArray(
+                        name = max_field_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_name].shape}")
+                    updated_data[max_field_redshift_name] = xr.DataArray(
+                        name = max_field_redshift_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field_redshift,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_redshift_name].shape}")
 
-            for field, (catalogue_field, column_indexes) in subgroup_fields_user_all.items():
+            for field, (catalogue_field, column_indexes, store_maximum) in subgroup_fields_user_all.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
                 updated_data[field] = xr.DataArray(
                     name = field,
@@ -1589,6 +1488,26 @@ Tags particles with the properties of the structure of which they were last a me
                     }
                 )
                 Console.print_verbose_info(f"                Shape: {updated_data[field].shape}")
+                if store_maximum:
+                    max_field_name = f"{field}__maximum"
+                    max_field_redshift_name = f"{field}__redshift_of_maximum"
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), subhalo_update_mask, snapshot_redshifts[snapshot_index])
+                    updated_data[max_field_name] = xr.DataArray(
+                        name = max_field_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_name].shape}")
+                    updated_data[max_field_redshift_name] = xr.DataArray(
+                        name = max_field_redshift_name,
+                        dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
+                        data = max_field_redshift,
+                        attrs = {
+                        }
+                    )
+                    Console.print_verbose_info(f"                Shape: {updated_data[max_field_redshift_name].shape}")
 
             #----------------------------------------------------------|
             # Computing and writing data in paralel with dask and zarr |
@@ -1596,75 +1515,6 @@ Tags particles with the properties of the structure of which they were last a me
             Console.print_info("        Computing and writing.")
 
             updated_data.to_zarr(f"{current_output_filepath.rsplit(".", 1)[0]}.zarr", mode = "w", group = particle_type)
-
-#            #----------------------------------------------------------|
-#            # Locate and update new values for particles in structures |
-#            #----------------------------------------------------------|
-#            Console.print_info("        Updating fields:")
-#
-#            Console.print_info("            ParticleIDs")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "ParticleIDs", membership["ParticleIDs"])
-#
-#            Console.print_info("            GroupNumber")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "GroupNumber", insert_existing_data("GroupNumber", membership["GroupNumber"], fof_update_mask, integer = True))
-#            Console.print_info("            LastGroupRedshift")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "LastGroupRedshift", insert_existing_data("LastGroupRedshift", snapshot_redshifts[snapshot_index], fof_update_mask, integer = False))
-#            Console.print_info("            FirstSubhaloID")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "FirstSubhaloID", insert_existing_data("FirstSubhaloID", central_subhalo_update_indexes, fof_update_mask, integer = True))
-#
-#            Console.print_info("            SubGroupNumber")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "SubGroupNumber", insert_existing_data("SubGroupNumber", membership["SubGroupNumber"], subhalo_update_mask, integer = True))
-#            Console.print_info("            SubhaloID")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "SubhaloID", insert_existing_data("SubhaloID", subhalo_update_indexes, subhalo_update_mask, integer = True))
-#            Console.print_info("            LastSubhaloRedshift")
-#            xarray_write_to_output_field(current_output_filepath, particle_type, "LastSubhaloRedshift", insert_existing_data("LastSubhaloRedshift", snapshot_redshifts[snapshot_index], subhalo_update_mask, integer = False))
-#
-#            for field, catalogue_field in fof_group_fields.items():
-#                Console.print_info(f"            {field} ({catalogue_field})")
-#                xarray_write_to_output_field(current_output_filepath, particle_type, field, insert_existing_data(field, get_catalogue_fof_data_by_particle(catalogue_field), fof_update_mask, integer = not issubclass(field_datatypes[field], float)))#TODO: the integer check is broken!!!
-#
-#            for field, catalogue_field in subgroup_fields_user_centrals.items():
-#                Console.print_info(f"            {field} ({catalogue_field})")
-#                xarray_write_to_output_field(current_output_filepath, particle_type, field, insert_existing_data(field, get_catalogue_central_subhalo_data_by_particle(catalogue_field), fof_update_mask, integer = not issubclass(field_datatypes[field], float)))
-#
-#            for field, catalogue_field in subgroup_fields_user_all.items():
-#                Console.print_info(f"            {field} ({catalogue_field})")
-#                xarray_write_to_output_field(current_output_filepath, particle_type, field, insert_existing_data(field, get_catalogue_subhalo_data_by_particle(catalogue_field), subhalo_update_mask, integer = not issubclass(field_datatypes[field], float)))
-
-
-#            #----------------------------------------------------------|
-#            # Locate and update new values for particles in structures |
-#            #----------------------------------------------------------|
-#            Console.print_info("        Updating fields:")
-#
-#            Console.print_info("            ParticleIDs")
-#            write_to_output_field(current_output_filepath, particle_type, "ParticleIDs", membership["ParticleIDs"].compute())
-#
-#            Console.print_info("            GroupNumber")
-#            write_to_output_field(current_output_filepath, particle_type, "GroupNumber", membership["GroupNumber"][fof_update_mask].compute(), mask = fof_update_mask)
-#            Console.print_info("            LastGroupRedshift")
-#            write_to_output_field(current_output_filepath, particle_type, "LastGroupRedshift", snapshot_redshifts[snapshot_index], mask = fof_update_mask)
-#            Console.print_info("            FirstSubhaloID")
-#            write_to_output_field(current_output_filepath, particle_type, "FirstSubhaloID", central_subhalo_update_indexes, mask = fof_update_mask)
-#
-#            Console.print_info("            SubGroupNumber")
-#            write_to_output_field(current_output_filepath, particle_type, "SubGroupNumber", membership["SubGroupNumber"][subhalo_update_mask].compute(), mask = subhalo_update_mask)
-#            Console.print_info("            SubhaloID")
-#            write_to_output_field(current_output_filepath, particle_type, "SubhaloID", subhalo_update_indexes.compute(), mask = subhalo_update_mask)
-#            Console.print_info("            LastSubhaloRedshift")
-#            write_to_output_field(current_output_filepath, particle_type, "LastSubhaloRedshift", snapshot_redshifts[snapshot_index], mask = subhalo_update_mask)
-#
-#            for field, catalogue_field in fof_group_fields.items():
-#                Console.print_info(f"            {field}")
-#                write_to_output_field(current_output_filepath, particle_type, field, catalogue_data["FOF"][catalogue_field][halo_update_indexes].compute(), mask = fof_update_mask)
-#
-#            for field, catalogue_field in subgroup_fields_user_centrals.items():
-#                Console.print_info(f"            {field}")
-#                write_to_output_field(current_output_filepath, particle_type, field, catalogue_data["Subhalo"][catalogue_field][central_subhalo_update_indexes].compute(), mask = fof_update_mask)
-#
-#            for field, catalogue_field in subgroup_fields_user_all.items():
-#                Console.print_info(f"            {field}")
-#                write_to_output_field(current_output_filepath, particle_type, field, catalogue_data["Subhalo"][catalogue_field][subhalo_update_indexes].compute(), mask = subhalo_update_mask)
 
         #-----------------------|
         # Clear catalogue cache |
