@@ -1195,20 +1195,21 @@ Tags particles with the properties of the structure of which they were last a me
                         Console.print_debug("                Done.") # Just to make the debug statements clear.
 
                     # Run a test to ensure data reordering is working correctly:
-                    #Console.print_debug("Running reorder test:")
-                    #Console.print_debug("    Loading previous data.")
-                    #existing_particle_ids = load_previous_data("ParticleIDs")
-                    #Console.print_debug("    Reordering data.")
-                    #reordered_particle_ids = existing_particle_ids[reorder_indexes]
-                    #Console.print_debug("    Wrapping with xarray.")
-                    #test_reordered_particle_ids = xr.DataArray(
-                    #    name = "ParticleIDs",
-                    #    dims = last_snapshot_output[particle_type]["ParticleIDs"].dims,
-                    #    data = reordered_particle_ids,
-                    #    attrs = {}
-                    #).chunk(rechunking_layout)
-                    #Console.print_debug("    Testing for mismatches.")
-                    #Console.print_debug("    Number of mismatched IDs:", (test_reordered_particle_ids != membership["ParticleIDs"]).sum().values)
+                    if Settings.debug:
+                        Console.print_debug("Running reorder test:")
+                        Console.print_debug("    Loading previous data.")
+                        existing_particle_ids = load_previous_data("ParticleIDs")
+                        Console.print_debug("    Reordering data.")
+                        reordered_particle_ids = existing_particle_ids[reorder_indexes]
+                        Console.print_debug("    Wrapping with xarray.")
+                        test_reordered_particle_ids = xr.DataArray(
+                            name = "ParticleIDs",
+                            dims = last_snapshot_output[particle_type]["ParticleIDs"].dims,
+                            data = reordered_particle_ids,
+                            attrs = {}
+                        ).chunk(rechunking_layout)
+                        Console.print_debug("    Testing for mismatches.")
+                        Console.print_debug("    Number of mismatched IDs:", (test_reordered_particle_ids != membership["ParticleIDs"]).sum().values)
 
                     reorder_and_cache_field("GroupNumber")
                     reorder_and_cache_field("LastGroupRedshift")
@@ -1246,7 +1247,7 @@ Tags particles with the properties of the structure of which they were last a me
                     return xr.where(update_mask, cached_data[field] + 1, cached_data[field])
 
                 def keep_maximum_data(field: str, redshift_field: str, updates: xr.DataArray|int|float, update_mask: xr.DataArray, redshift: float) -> tuple[xr.DataArray, xr.DataArray]:
-                    increased_value_update_mask = (updates >= cached_data[field]) & update_mask
+                    increased_value_update_mask = (updates.fillna(-np.inf) >= cached_data[field].fillna(-np.inf)) & update_mask
                     return xr.where(
                         increased_value_update_mask,
                         updates,
@@ -1418,10 +1419,11 @@ Tags particles with the properties of the structure of which they were last a me
 
             for field, (catalogue_field, column_indexes, store_maximum) in fof_group_fields.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
+                updated_field = get_catalogue_fof_data_by_particle(catalogue_field, indexes = column_indexes)
                 updated_data[field] = xr.DataArray(
                     name = field,
                     dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["FOF"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_fof_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask),
+                    data = insert_existing_data(field, updated_field, fof_update_mask),
                     attrs = {
                     }
                 )
@@ -1429,7 +1431,7 @@ Tags particles with the properties of the structure of which they were last a me
                 if store_maximum:
                     max_field_name = f"{field}__maximum"
                     max_field_redshift_name = f"{field}__redshift_of_maximum"
-                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_fof_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask, snapshot_redshifts[snapshot_index])
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, updated_field, fof_update_mask, snapshot_redshifts[snapshot_index])
                     updated_data[max_field_name] = xr.DataArray(
                         name = max_field_name,
                         dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["FOF"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
@@ -1449,10 +1451,11 @@ Tags particles with the properties of the structure of which they were last a me
 
             for field, (catalogue_field, column_indexes, store_maximum) in subgroup_fields_user_centrals.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
+                updated_field = get_catalogue_central_subhalo_data_by_particle(catalogue_field, indexes = column_indexes)
                 updated_data[field] = xr.DataArray(
                     name = field,
                     dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_central_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask),
+                    data = insert_existing_data(field, updated_field, fof_update_mask),
                     attrs = {
                     }
                 )
@@ -1460,7 +1463,7 @@ Tags particles with the properties of the structure of which they were last a me
                 if store_maximum:
                     max_field_name = f"{field}__maximum"
                     max_field_redshift_name = f"{field}__redshift_of_maximum"
-                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_central_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), fof_update_mask, snapshot_redshifts[snapshot_index])
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, updated_field, fof_update_mask, snapshot_redshifts[snapshot_index])
                     updated_data[max_field_name] = xr.DataArray(
                         name = max_field_name,
                         dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
@@ -1480,10 +1483,11 @@ Tags particles with the properties of the structure of which they were last a me
 
             for field, (catalogue_field, column_indexes, store_maximum) in subgroup_fields_user_all.items():
                 Console.print_info(f"            {field} ({catalogue_field})")
+                updated_field = get_catalogue_subhalo_data_by_particle(catalogue_field, indexes = column_indexes)
                 updated_data[field] = xr.DataArray(
                     name = field,
                     dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
-                    data = insert_existing_data(field, get_catalogue_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), subhalo_update_mask),
+                    data = insert_existing_data(field, updated_field, subhalo_update_mask),
                     attrs = {
                     }
                 )
@@ -1491,7 +1495,7 @@ Tags particles with the properties of the structure of which they were last a me
                 if store_maximum:
                     max_field_name = f"{field}__maximum"
                     max_field_redshift_name = f"{field}__redshift_of_maximum"
-                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, get_catalogue_subhalo_data_by_particle(catalogue_field, indexes = column_indexes), subhalo_update_mask, snapshot_redshifts[snapshot_index])
+                    max_field, max_field_redshift = keep_maximum_data(max_field_name, max_field_redshift_name, updated_field, subhalo_update_mask, snapshot_redshifts[snapshot_index])
                     updated_data[max_field_name] = xr.DataArray(
                         name = max_field_name,
                         dims = "snapshot_particle_index" if ((column_indexes is not None and len(column_indexes) == 1) or len(catalogue_data["Subhalo"][catalogue_field].shape) == 1) else ("snapshot_particle_index", "particle_type_number"),
